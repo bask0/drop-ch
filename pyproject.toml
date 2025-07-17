@@ -7,7 +7,7 @@ name = "project"
 # ===> Action needed <=== Change the version if needed
 version = "0.1.0"
 # ===> Action needed <=== Update the description
-description = "A flexible framework for hyperparameter tuning and cross-validation using PyTorch Lightning and Optuna"
+description = "Streamflow-Net is a data-driven neural network architecture for modeling and routing streamflow in distributed hydrological systems."
 # ===> Action needed <=== Update the authors
 authors = [
   { name = "Basil Kraft", email = "basil.kraft@env.ethz.ch" }
