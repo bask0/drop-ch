@@ -1,11 +1,13 @@
 name: streamflow-net
 channels:
+  - nvidia
   - pytorch
   - pyg
   - conda-forge
 dependencies:
   - python=3.11
   - pytorch
+  - pytorch-cuda=11.7
   - torchvision
   - torchaudio
   - pytorch-sparse
