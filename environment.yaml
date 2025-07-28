@@ -34,6 +34,7 @@ dependencies:
   - pymysql
   - pvlib-python
   - imagemagick
+  - owslib
   - pip
   - pip:
     - dask-labextension
