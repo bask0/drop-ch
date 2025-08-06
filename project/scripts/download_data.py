@@ -1,12 +1,19 @@
+"""Script to download and process MERIT and SoilGrids data."""
+
+import logging
 import os
 import shutil
 from pathlib import Path
-import logging
-import rioxarray as rxr
-import xarray as xr
+
 import numpy as np
+
 from owslib.wcs import WebCoverageService
+
+import rioxarray as rxr
+
 from tqdm import tqdm
+
+import xarray as xr
 
 
 logging.basicConfig(format='%(asctime)s | %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -124,6 +131,9 @@ for variable in (pbar := tqdm(variables)):
 
     for depth in depths:
 
+        if wcs is None:
+            raise ValueError(f'No WCS service found for variable `{variable}`')
+
         var_query = f'{variable}_{depth[0]}-{depth[1]}cm_mean'
 
         # Get the data
@@ -146,11 +156,16 @@ for variable in variables:
     da_var = 0.
     for depth in depths:
         var_query = f'{variable}_{depth[0]}-{depth[1]}cm_mean'
-        da_var += rxr.open_rasterio(data_dir / f'{var_query}.tif').rename(x='lon', y='lat') * (depth[1] - depth[0])
+        da_var += rxr.open_rasterio(
+            data_dir / f'{var_query}.tif'
+        ).rename(  # type: ignore
+            x='lon', y='lat'
+        ) * (depth[1] - depth[0])
+
+    assert isinstance(da_var, xr.DataArray), f'Expected DataArray, got {type(da_var)}'
 
     da_var /= (depths[-1][1] - depths[0][0])
 
-    da_var.attrs = da_var.attrs
     da_var.attrs.update(**da_var.spatial_ref.attrs)
     da_var.attrs['description'] = f'soilgrids 2.0 {variable.upper()} mean {depths[0][0]} to {depths[-1][1]} cm.'
     da_var = da_var.isel(band=0).drop_vars(['spatial_ref', 'band'])

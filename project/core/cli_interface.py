@@ -26,13 +26,10 @@ Typical usage:
 
 import importlib
 from typing import Any
-
 from jsonargparse import namespace_to_dict
-
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
-
 import optuna
 
 
@@ -53,7 +50,7 @@ class CLI(LightningCLI):
 
     def __init__(self, **kwargs):
         """
-        Initializes the class with the provided keyword arguments.
+        Initialize the class with the provided keyword arguments.
 
         This constructor calls the superclass initializer with specific arguments to set up
         the LightningModule and LightningDataModule, along with additional configuration options.
@@ -73,8 +70,7 @@ class CLI(LightningCLI):
 
     def add_arguments_to_parser(self, parser):
         """
-        Adds custom arguments and argument blocks to the provided parser for configuring the tuning engine,
-        search space, and forced callbacks.
+        Add custom arguments and argument blocks to the provided parser for configuration.
 
         This method first adds base arguments from the superclass, then registers arguments for the
         TuningEngine class under the "tuning_engine" namespace. It links relevant arguments (such as
@@ -126,7 +122,7 @@ class CLI(LightningCLI):
 
     def before_instantiate_classes(self):
         """
-        Prepares and instantiates the tuning engine and its dependencies before class instantiation.
+        Prepare and instantiates the tuning engine and its dependencies before class instantiation.
 
         This method performs the following steps:
         1. Imports the TuningEngine class to avoid circular imports.
@@ -166,7 +162,7 @@ class CLI(LightningCLI):
 
     def class_instantiate(self, cfg):
         """
-        Dynamically instantiates a class from a configuration dictionary.
+        Dynamically instantiate a class from a configuration dictionary.
 
         Args:
             cfg (dict): Configuration dictionary with the following keys:

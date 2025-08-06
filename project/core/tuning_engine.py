@@ -13,14 +13,13 @@ This module defines the `TuningEngine` class and associated helpers for:
 - and storing results in Optuna studies.
 """
 
-import sys
-import shutil
-import warnings
 import logging
-from pathlib import Path
 from os import PathLike
+from pathlib import Path
+import shutil
+import sys
 from typing import TYPE_CHECKING, Literal
-
+import warnings
 import optuna
 from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 
@@ -109,10 +108,10 @@ class TuningEngine:
             num_folds: int | None = None,
             monitor: str = 'val_loss',
             skip_tuning: bool = False,
-            overwrite: bool = False,
-            ):
+            overwrite: bool = False
+    ) -> None:
         """
-        Initializes the TuningEngine with the specified configuration.
+        Initialize the TuningEngine with the specified configuration.
 
         Args:
             sampler (optuna.samplers.BaseSampler): The Optuna sampler to use for hyperparameter suggestion.
@@ -193,7 +192,7 @@ class TuningEngine:
 
     def tune(self) -> optuna.Study:
         """
-        Runs the hyperparameter tuning process using Optuna and manages the best configuration.
+        Run the hyperparameter tuning process using Optuna and manages the best configuration.
 
         If tuning is skipped (`self.skip_tuning` is True), loads and returns an existing Optuna study.
         Otherwise, runs the tuning process, copies the best configuration file to the experiment directory,
@@ -221,7 +220,7 @@ class TuningEngine:
 
     def xval(self) -> optuna.Study:
         """
-        Performs cross-validation by running the tuning engine without hyperparameter optimization.
+        Perform cross-validation by running the tuning engine without hyperparameter optimization.
 
         Returns:
             optuna.Study: The Optuna study object containing the results of the cross-validation run.
@@ -231,7 +230,7 @@ class TuningEngine:
 
     def run(self, is_tune: bool = True) -> optuna.Study:
         """
-        Runs the Optuna study for hyperparameter tuning or cross-validation.
+        Run the Optuna study for hyperparameter tuning or cross-validation.
 
         Args:
             is_tune (bool, optional): If True, runs hyperparameter tuning using the configured sampler and pruner.
@@ -366,7 +365,7 @@ class TuningEngine:
 
     def sample_parameters(self, trial: 'Trial') -> list[str]:
         """
-        Samples parameters from the defined search space using the provided Optuna trial object.
+        Sample parameters from the defined search space using the provided Optuna trial object.
 
         For each parameter in the search space, this method selects a value based on the specified
         suggestion method ("loguniform", "uniform", "int", or "categorical") and appends it as a
@@ -448,7 +447,7 @@ class TuningEngine:
     @staticmethod
     def _get_cli_config_and_args() -> tuple[list[str], list[str]]:
         """
-        Parses command-line arguments to separate configuration file paths from other CLI arguments.
+        Parse command-line arguments to separate configuration file paths from other CLI arguments.
 
         This method scans sys.argv (excluding the script name) and extracts any config file paths
         specified via '--config', '-c', '--config=...', or '-c=...'. All other arguments are returned
@@ -503,7 +502,7 @@ class TuningEngine:
 
     def _init_optuna_study(self, db_path: Path) -> None:
         """
-        Initializes an Optuna study with the specified database path.
+        Initialize an Optuna study with the specified database path.
 
         Attempts to create a new Optuna study using the experiment name and storage backend.
         If a study with the same name already exists, the creation is skipped.
@@ -528,7 +527,7 @@ class TuningEngine:
 
     def _create_dirs_if_needed(self, dir: PathLike | str, remove: bool = False) -> None:
         """
-        Creates the specified directory if it does not exist, with optional removal of existing contents.
+        Create the specified directory if it does not exist, with optional removal of existing contents.
 
         Args:
             dir (PathLike | str): The target directory path to create.

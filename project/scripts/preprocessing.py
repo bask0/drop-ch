@@ -1,30 +1,33 @@
-import geopandas as gpd
-from shapely import force_2d
-import xarray as xr
-import rioxarray as rxr
-import rasterio as rio  # keep
-from rasterio import enums
-from rasterio.enums import MergeAlg
-import rasterio.features as rfeatures
-from tqdm import tqdm
-from tqdm.contrib.concurrent import process_map
-import numpy as np
-import xrspatial as xrs
-from sklearn.neural_network import MLPRegressor as MPL
-import richdem as rd
-import shutil
-from scipy.stats import circmean
-from pathlib import Path
-import warnings
-from joblib import dump, load
-import pyreadr
-import pandas as pd
+"""This module contains functions for preprocessing geospatial data, including zonal statistics, reprojecting datasets, reading RDS files, and extracting features from raster data."""
+
+import gzip
 import os
+import pathlib
+import shutil
 import struct
 import tarfile
-import gzip
-import pathlib
+import warnings
+from pathlib import Path
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import pyreadr
+import rasterio as rio  # keep
+import rasterio.features as rfeatures
+import rioxarray as rxr
+import richdem as rd
 import torch
+import xarray as xr
+import xrspatial as xrs
+from joblib import dump, load
+from rasterio import enums
+from rasterio.enums import MergeAlg
+from scipy.stats import circmean
+from shapely import force_2d
+from sklearn.neural_network import MLPRegressor as MPL
+from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 
 warnings.filterwarnings('ignore', module='pyproj', category=UserWarning)
