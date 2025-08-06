@@ -1472,8 +1472,8 @@ class GraphDataModule(pl.LightningDataModule):
             k_hops=self.k_hops,
             temporal_context_length=temporal_context_length,
             prediction_length=prediction_length,
-            hru_subset=assert_non_NaN(hru_subset),
-            hru_samples=assert_non_NaN(hru_samples),
+            hru_subset=assert_non_NaN(hru_subset),  # type: ignore
+            hru_samples=assert_non_NaN(hru_samples),  # type: ignore
             aggregate_catchments=self.aggregate_catchments,
             ds_mean=None if stage == 'init' else self.ds_mean,
             ds_std=None if stage == 'init' else self.ds_std,
