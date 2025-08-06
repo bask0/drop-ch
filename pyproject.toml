@@ -35,9 +35,9 @@ dev = [
   "black",
   "isort",
   "flake8",
-  "flake8-bugbear",         # extra checks for likely bugs
-  "flake8-docstrings",      # checks for docstring style
-  "flake8-import-order",    # enforces import order rules
+  "flake8-bugbear",          # extra checks for likely bugs
+  "flake8-docstrings",       # checks for docstring style
+  "flake8-isort",            # 
   "mypy",
 
   # Interactive dev
