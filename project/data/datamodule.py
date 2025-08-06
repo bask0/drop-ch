@@ -642,8 +642,11 @@ class HRUData(InMemoryDataset):
 
             # Only keep indices that allow for a full context and prediction window
             timesteps_with_obs = timesteps_with_obs[
-                (timesteps_with_obs >= self.temporal_context_length) &
-                (timesteps_with_obs <= timesteps_with_obs.max() - self.prediction_length + 1)
+                (
+                    timesteps_with_obs >= self.temporal_context_length
+                ) & (
+                    timesteps_with_obs <= timesteps_with_obs.max() - self.prediction_length + 1
+                )
             ]
             if len(timesteps_with_obs) == 0:
                 # If no valid time window, return a default slice (may be all NaN)
@@ -1297,8 +1300,8 @@ class GraphDataModule(pl.LightningDataModule):
 
         edge_index = torch.tensor(
             np.asarray(
-                [[i, j.item()] for i, tgt in enumerate(ds.downstream.values) if (tgt != -1) and
-                 len(j := np.argwhere(ds.hru.values == tgt)) > 0]
+                [[i, j.item()] for i, tgt in enumerate(ds.downstream.values)
+                 if (tgt != -1) and len(j := np.argwhere(ds.hru.values == tgt)) > 0]
             ).T
         )
 
