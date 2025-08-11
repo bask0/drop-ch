@@ -1,7 +1,7 @@
 """Data module for handling HRU data in PyTorch Geometric format."""
 
 from dataclasses import fields, is_dataclass
-from typing import Callable, Literal, TypeVar
+from typing import Callable, Literal
 import warnings
 import lightning.pytorch as pl
 import numpy as np
@@ -15,29 +15,7 @@ from torch_sparse import SparseTensor
 import xarray as xr
 
 from project.utils.torch.normalize import Normalize, RobustStandardize
-from project.utils.types import HRUSample
-
-AnyNotNone = TypeVar("AnyNotNone")
-
-
-def assert_non_NaN(x: AnyNotNone | None) -> AnyNotNone:
-    """
-    Assert that the input x is not None.
-
-    Parameters:
-        x (AnyNotNone): The input to check.
-
-    Returns:
-        AnyNotNone: Returns the input.
-
-    Raises:
-        ValueError: If the input is None.
-    """
-
-    if x is None:
-        raise ValueError('Input is None.')
-
-    return x
+from project.utils.typing import HRUSample, assert_non_NaN
 
 
 def suppress_sparse_csc_warning(idx: int):
@@ -250,82 +228,6 @@ class HRUData(InMemoryDataset):
         self.ds_mean = assert_non_NaN(ds_mean)
         self.ds_std = assert_non_NaN(ds_std)
         self.q95 = assert_non_NaN(q95)
-
-    @staticmethod
-    def assert_non_NaN(x: AnyNotNone | None) -> AnyNotNone:
-        """
-        Assert that the input xarray Dataset is not None.
-
-        Parameters:
-            x (xr.Dataset | None): The input xarray Dataset to check.
-
-        Returns:
-            xr.Dataset: The input Dataset if it is not None.
-
-        Raises:
-            ValueError: If the input Dataset is None.
-        """
-
-        if x is None:
-            raise ValueError('Input dataset is None.')
-
-        return x
-
-    @staticmethod
-    def convert_mmd_to_m3s(ds: xr.Dataset, variables: list[str], area_var: str = 'area') -> xr.Dataset:
-        """
-        Convert variables in an xarray Dataset from millimeters per day (mm/d) to cubic meters per second (m³/s).
-
-        Parameters:
-            ds (xr.Dataset): The input xarray Dataset containing the variables to convert.
-            variables (list[str]): List of variable names in the dataset to convert from mm/d to m³/s.
-            area_var (str, optional): Name of the variable in the dataset representing the catchment area in square
-            kilometers (default is 'area').
-
-        Returns:
-            xr.Dataset: The dataset with new variables added for each input variable, named '<variable>_m3s'
-                containing the converted values in m³/s.
-
-        Notes:
-            - Assumes the area variable is in square kilometers (km²).
-            - The conversion uses the formula: m³/s = (mm/d * area_km2) / (60 * 60 * 24) * 1000.
-        """
-
-        for variable in variables:
-            # Note that area is in km2.
-            ds[variable + '_m3s'] = ds[variable] * ds[area_var] / 60 / 60 / 24 * 1000
-
-        return ds
-
-    @staticmethod
-    def convert_m3s_to_mmd(ds: xr.Dataset, variables: list[str], area_var: str = 'area') -> xr.Dataset:
-        """
-        Convert variables from volumetric flow rate (m³/s) to depth per unit area (mm/day).
-
-        This function takes specified variables in the input xarray.Dataset, assumed to be in units of m³/s,
-        and converts them to mm/day using the catchment area provided in the dataset (default variable name 'area',
-        in km²). The converted variables are added to the dataset with the suffix '_mmd'.
-
-        Args:
-            ds (xr.Dataset): Input dataset containing variables to convert and the area variable.
-            variables (list[str]): List of variable names (as strings) in ds to convert from m³/s to mm/day.
-            area_var (str, optional): Name of the area variable in ds (default is 'area'). Area must be in km².
-
-        Returns:
-            xr.Dataset: The input dataset with new variables added, each suffixed with '_mmd', representing the
-            converted values in mm/day.
-
-        Notes:
-            - Assumes the area variable is in square kilometers (km²).
-            - The conversion uses the formula: mm/d = (m³/s / area_km2) * (60 * 60 * 24) / 1000.
-
-        """
-
-        for variable in variables:
-            # Note that area is in km2.
-            ds[variable + '_mmd'] = ds[variable] / ds[area_var] * 60 * 60 * 24 / 1000
-
-        return ds
 
     def len(self) -> int:
         """Return the number of samples in the dataset."""
