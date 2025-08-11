@@ -3,6 +3,7 @@
 from dataclasses import fields, is_dataclass
 from typing import Callable, Literal
 import warnings
+from dask import config as dask_config
 import lightning.pytorch as pl
 import numpy as np
 import torch
@@ -14,8 +15,11 @@ from torch_geometric.utils import add_self_loops, degree, k_hop_subgraph
 from torch_sparse import SparseTensor
 import xarray as xr
 
+from project.data.splitting import CatchmentSplitter
 from project.utils.torch.normalize import Normalize, RobustStandardize
 from project.utils.typing import HRUSample, assert_non_NaN
+
+dask_config.set(scheduler='single-threaded')
 
 
 def suppress_sparse_csc_warning(idx: int):
@@ -148,6 +152,8 @@ class HRUData(InMemoryDataset):
                 'hru', np.arange(len(ds.hru))
             )
         )
+        ds.Q_obs_m3s.load()
+        ds.Q_obs_mmd.load()
 
         # Determine which HRUs have observations
         if self.use_prevah:
@@ -1128,71 +1134,99 @@ class HRUData(InMemoryDataset):
 
 class GraphDataModule(pl.LightningDataModule):
     """
-    Lightning DataModule for graph-based HRU modeling using PyTorch Geometric.
+    Torch Lightning DataModule for graph-based hydrological response unit (HRU) modeling using PyTorch Geometric.
 
-    This module manages the dataset splits (train, validation, test, prediction), applies k-hop subgraph extraction,
-    and constructs the relevant `HRUData` datasets for each stage.
+    This module prepares graph-structured data from an xarray-based dataset representing HRU-level catchment data.
+    It automates the process of subsetting, graph construction (via k-hop subgraphs), normalization, and batch
+    preparation for training, validation, testing, and prediction stages.
 
+    Key Features:
+    -------------
+    - Constructs graphs for catchments using downstream relationships and `k_hop_subgraph` from PyTorch Geometric.
+    - Allows flexible dataset splits using named catchments or randomized HRUs.
+    - Supports both HRU-level and aggregated catchment-level learning setups.
+    - Normalizes input features using statistics computed from the training set.
+    - Provides PyG-compatible or standard PyTorch DataLoaders depending on aggregation mode.
+
+    Attributes:
+    -----------
+        hru_subset_train (np.ndarray): HRUs used for training.
+        hru_subset_valid (np.ndarray): HRUs used for validation.
+        hru_subset_test (np.ndarray): HRUs used for testing.
+        ds (xarray.Dataset): The loaded dataset with HRU coordinates.
+        train_catchments (dict[str, int]): Training catchments.
+        valid_catchments (list[int]): Validation catchments or all unique catchments if random_catchments is True.
+        test_catchments (list[int]): Test catchments or all unique catchments if random_catchments is True.
+        pred_catchments (np.ndarray or xarray.DataArray): Catchments for prediction or all outlets if
+            aggregate_catchments is False.
+        stat_features (list[str]): Static features used.
+        stat_routing_features (list[str]): Static routing features used.
+        dyn_features (list[str] or None): Dynamic features used.
+        aggregate_catchments (bool): Whether to aggregate predictions at the catchment level.
+        k_hops (int): Number of hops for subgraph extraction.
+        temporal_context_length (int): Temporal context window length.
+        prediction_length (int): Prediction window length.
+        batch_size (int): Batch size for data loading.
+        num_workers (int): Number of worker processes for data loading.
+        ds_mean (np.ndarray): Mean values of the dataset features (from training set).
+        ds_std (np.ndarray): Standard deviation of the dataset features (from training set).
+        q95 (float): 95th percentile of observed streamflow (from training set).
+
+    Notes:
+    ------
+    - Uses `k_hop_subgraph` to construct subgraphs for each HRU sample, preserving spatial structure.
+    - Graph connectivity is inferred from the `downstream` attribute in the dataset.
+    - Compatible with both graph neural networks and simpler MLP/RNN models via aggregation.
+    - Designed to work with `HRUData`, a PyG-compatible dataset that encapsulates temporal and spatial features.
     """
 
     def __init__(
         self,
-        ds: xr.Dataset,
-        train_catchments: dict[str, int],
-        valid_catchments: dict[str, int],
-        test_catchments: dict[str, int],
+        data_path: str,
         stat_features: list[str],
         stat_routing_features: list[str] | None = None,
         dyn_features: list[str] | None = None,
-        random_catchments: bool = False,
-        k_hops: int = 10,
+        split_mode: Literal['easy', 'hard', 'random'] = 'random',
         aggregate_catchments: bool = False,
+        k_hops: int = 10,
         temporal_context_length: int = 100,
         prediction_length: int = 20,
         batch_size: int = 32,
         num_workers: int = 4,
+        ds_subset: dict | None = None
     ) -> None:
         """
-        Torch Lightning DataModule for graph-based hydrological response unit (HRU) modeling using PyTorch Geometric.
+        Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
 
-        This module prepares graph-structured data from an xarray-based dataset representing HRU-level catchment data.
-        It automates the process of subsetting, graph construction (via k-hop subgraphs), normalization, and batch
-        preparation for training, validation, testing, and prediction stages.
-
-        Key Features:
-        -------------
-        - Constructs graphs for catchments using downstream relationships and `k_hop_subgraph` from PyTorch Geometric.
-        - Allows flexible dataset splits using named catchments or randomized HRUs.
-        - Supports both HRU-level and aggregated catchment-level learning setups.
-        - Normalizes input features using statistics computed from the training set.
-        - Provides PyG-compatible or standard PyTorch DataLoaders depending on aggregation mode.
-
-        Attributes:
-        -----------
-        hru_subset_train : np.ndarray
-            HRUs included in the training split.
-        hru_subset_valid : np.ndarray
-            HRUs included in the validation split.
-        hru_subset_test : np.ndarray
-            HRUs included in the testing split.
-        ds_mean : xr.Dataset
-            Mean values of features used for normalization (computed from train split).
-        ds_std : xr.Dataset
-            Standard deviation values of features used for normalization.
-        q95 : float
-            95th percentile of streamflow used for discharge normalization/scaling.
-        pred_catchments : list or xr.DataArray
-            HRUs used for prediction, typically headwater catchments if aggregation is disabled.
-
-        Notes:
-        ------
-        - Uses `k_hop_subgraph` to construct subgraphs for each HRU sample, preserving spatial structure.
-        - Graph connectivity is inferred from the `downstream` attribute in the dataset.
-        - Compatible with both graph neural networks and simpler MLP/RNN models via aggregation.
-        - Designed to work with `HRUData`, a PyG-compatible dataset that encapsulates temporal and spatial features.
+        Args:
+            data_path (str): Path to the dataset directory.
+            stat_features (list[str]): List of static feature names to use.
+            stat_routing_features (list[str] | None, optional): List of static routing feature names. If None, uses
+                stat_features.
+            dyn_features (list[str] | None, optional): List of dynamic feature names. If None, dynamic features
+                are not used.
+            split_mode (str, optional): Mode for splitting the dataset. Options are 'random', 'easy', or 'hard'.
+                See :class:`project.data.splitting.CatchmentSplitter` for more details. Default is 'random'.
+            aggregate_catchments (bool, optional): If True, aggregates predictions at the catchment level. Default
+                is False.
+            k_hops (int, optional): Number of hops for subgraph extraction. Default is 10.
+            temporal_context_length (int, optional): Length of the temporal context window for input sequences.
+                Default is 100.
+            prediction_length (int, optional): Length of the prediction window. Default is 20.
+            batch_size (int, optional): Batch size for data loading. Default is 32.
+            num_workers (int, optional): Number of worker processes for data loading. Default is 4.
+            ds_subset (dict, optional)  Additional keyword arguments for xarray dataset subsettingusing `sel(...)`,
+                e.g., `{'time': slice(...)}`. Default is None, which means no subsetting is done.
         """
 
         super().__init__()
+
+        ds = xr.open_zarr(data_path).sel(ds_subset)
+        if ds_subset is not None:
+            ds = ds.sel(**ds_subset)
+
+        train_catchments, valid_catchments, test_catchments, use_random_catchments = CatchmentSplitter(
+            mode=split_mode).compute()
 
         ds = ds.assign_coords(
             hru_i=(
@@ -1236,11 +1270,12 @@ class GraphDataModule(pl.LightningDataModule):
         unique_catchments = np.unique(
             list(train_catchments.values()) + list(valid_catchments.values()) + list(test_catchments.values()))
 
-        if random_catchments:
+        if use_random_catchments:
             # Find HRUs with observations.
             RandomState = np.random.RandomState(21)
             has_obs = ds.hru.where(
-                ds.Q_obs.isel(time=slice(temporal_context_length, None)).notnull().any('time'), drop=True).values
+                ds.Q_obs_mmd.isel(
+                    time=slice(temporal_context_length, None)).notnull().any('time').compute(), drop=True).values
             has_obs = RandomState.permutation(has_obs)
             train_subset_hru = has_obs[:int(0.6 * len(has_obs))]
             valid_subset_hru = has_obs[int(0.6 * len(has_obs)):int(0.8 * len(has_obs))]
@@ -1266,10 +1301,10 @@ class GraphDataModule(pl.LightningDataModule):
         self.ds = ds
 
         self.train_catchments = train_catchments
-        self.valid_catchments = unique_catchments if random_catchments else list(valid_catchments.values())
-        self.test_catchments = unique_catchments if random_catchments else list(test_catchments.values())
+        self.valid_catchments = unique_catchments if use_random_catchments else list(valid_catchments.values())
+        self.test_catchments = unique_catchments if use_random_catchments else list(test_catchments.values())
         self.pred_catchments = unique_catchments if aggregate_catchments else ds.hru.where(
-            ds.downstream == -1, drop=True)
+            ds.downstream.load() == -1, drop=True)
 
         self.stat_features = stat_features
         self.stat_routing_features = stat_routing_features if stat_routing_features is not None else stat_features
@@ -1377,8 +1412,8 @@ class GraphDataModule(pl.LightningDataModule):
             k_hops=self.k_hops,
             temporal_context_length=temporal_context_length,
             prediction_length=prediction_length,
-            hru_subset=assert_non_NaN(hru_subset),  # type: ignore
-            hru_samples=assert_non_NaN(hru_samples),  # type: ignore
+            hru_subset=hru_subset,  # type: ignore
+            hru_samples=hru_samples,  # type: ignore
             aggregate_catchments=self.aggregate_catchments,
             ds_mean=None if stage == 'init' else self.ds_mean,
             ds_std=None if stage == 'init' else self.ds_std,
