@@ -26,11 +26,18 @@ Typical usage:
 
 import importlib
 from typing import Any
+import warnings
 from jsonargparse import namespace_to_dict
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
 import optuna
+
+from .utils import PredictionWriter
+
+# Ignore anticipated PL warnings.
+warnings.filterwarnings('ignore', '.*infer the indices fetched for your dataloader.*')
+warnings.filterwarnings('ignore', '.*You requested to overfit.*')
 
 
 class CLI(LightningCLI):
@@ -119,6 +126,33 @@ class CLI(LightningCLI):
             "checkpoint_callback.save_top_k": 1,
             "checkpoint_callback.filename": "best",
         })
+        parser.add_lightning_class_args(PredictionWriter, "prediction_writer")
+        parser.set_defaults({
+            "prediction_writer.write_all_variables": False,
+        })
+
+        # ---------- Custom configuration ----------
+        # Link input dimensionality
+        parser.link_arguments(
+            'data.num_stat_features', 'model.init_args.num_static_in', apply_on='instantiate')
+        parser.link_arguments(
+            'data.num_stat_routing_features', 'model.init_args.num_stat_routing_features', apply_on='instantiate')
+        parser.link_arguments(
+            'data.num_dyn_features', 'model.init_args.num_dynamic_in', apply_on='instantiate')
+
+        # Link normalization arguments
+        parser.link_arguments(
+            'data.norm_args_stat_features', 'model.init_args.norm_args_stat_features',
+            apply_on='instantiate')
+        parser.link_arguments(
+            'data.norm_args_stat_routing_features', 'model.init_args.norm_args_stat_routing_features',
+            apply_on='instantiate')
+        parser.link_arguments(
+            'data.norm_args_dyn_features', 'model.init_args.norm_args_dyn_features',
+            apply_on='instantiate')
+        parser.link_arguments(
+            'data.norm_args_targets', 'model.init_args.norm_args_targets',
+            apply_on='instantiate')
 
     def before_instantiate_classes(self):
         """
