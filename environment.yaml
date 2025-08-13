@@ -1,17 +1,22 @@
 name: streamflow-net
 channels:
-  - nvidia
   - pytorch
+  - nvidia
   - pyg
   - conda-forge
 dependencies:
   - python=3.11
+
+  # --- PyTorch (CUDA 12.4 via conda) ---
   - pytorch
-  - pytorch-cuda=12.8
   - torchvision
   - torchaudio
-  - pytorch-sparse
-  - torch-geometric
+  - pytorch-cuda=12.4
+
+  # --- PyTorch Geometric (meta-package resolves torch-scatter/sparse/etc.) ---
+  - pyg
+
+  # --- Other deps ---
   - lightning
   - numpy
   - scikit-learn
@@ -38,16 +43,16 @@ dependencies:
   - owslib
   - pip
   - pip:
-    - dask-labextension
-    - tensorboard
-    - flake8
-    - kaleido
-    - jsonargparse[signatures]>=4.18.0
-    - omegaconf
-    - jupyterlab-optuna
-    - einops
-    - ipywidgets
-    - IProgress
-    - rioxarray
-    - xarray-spatial
-    - -e .[dev]
+      - dask-labextension
+      - tensorboard
+      - flake8
+      - kaleido
+      - jsonargparse[signatures]>=4.18.0
+      - omegaconf
+      - jupyterlab-optuna
+      - einops
+      - ipywidgets
+      - IProgress
+      - rioxarray
+      - xarray-spatial
+      - -e .[dev]
