@@ -130,8 +130,6 @@ class LSTM(torch.nn.Module):
 
         self.model_type = 'LSTM'
 
-        self.save_hyperparameters()  # Optional: assumes a lightning-like utility method
-
         # Static input encoding: encodes static features into hidden representation
         self.static_encoding = EncodingModule(
             num_in=num_static_in,
