@@ -77,7 +77,7 @@ def batch(train_loader) -> HRUSample:
     return batch
 
 
-def test_pipeline_smoke(stat_features, dyn_features, graph_data_module, batch):
+def test_lumped_pipeline_smoke(stat_features, dyn_features, graph_data_module, batch):
 
     model = RunoffNet(
         num_static_in=len(stat_features),
