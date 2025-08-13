@@ -1,7 +1,15 @@
 model:
-  class_path: project.models.lit_model.LitModel
+  class_path: project.nn.runoff_net.RunoffNet
   init_args:
     hidden_size: 32
+    lstm_layers: 1
+    dropout: 0.0
+    enc_dropout: 0.0
+    learning_rate: 0.001
+    weight_decay: 0.01
+    max_q_chunk_size: 20
+    prediction_length: 20
+    normalize_runoff: true
 
 data:
   class_path: project.data.datamodule.GraphDataModule
@@ -14,19 +22,11 @@ data:
       -  aspect_mean
       -  barren_freq
       -  bdod_mean
-      -  beginning_of_operation
       -  cfvo_mean
       -  clay_mean
-      -  construction_year
       -  dam_height
-      -  dam_name
-      -  dam_type_name
-      -  downstream
-      -  facility_aim_name
       -  forests_freq
       -  glaciers_freq
-      -  has_obs
-      -  has_prevah
       -  height_max
       -  height_mean
       -  height_min
@@ -45,18 +45,26 @@ data:
       -  slope_max
       -  slope_mean
       -  slope_min
-      -  storage_level
       -  upstream_area
       -  water_freq
       -  wetlands_freq
     stat_routing_features:
-      - area
-      - water_freq
-      - is_lake
-      - slope_mean
-      - is_barrage
-      - is_floodcontrol
-      - is_hydroelectricity
+      -  area
+      -  dam_height
+      -  height_max
+      -  height_mean
+      -  height_min
+      -  impoundment_volume
+      -  is_barrage
+      -  is_floodcontrol
+      -  is_hydroelectricity
+      -  is_lake
+      -  is_other_aim
+      -  is_regulated_lake
+      -  is_storage_dam
+      -  slope_mean
+      -  upstream_area
+      -  water_freq
     dyn_features:
       - prec
       - tair
@@ -70,14 +78,14 @@ data:
 
 trainer:
   max_epochs: 3
-  accelerator: cpu
 
 tuning_engine:
   exp_dir: experiments/lumped
   log_dir: logs/lumped
   monitor: val_loss
   n_trials: 2
-  study_name: test
+  study_name: study
+  num_folds: 1
   overwrite: False
 
   sampler:
