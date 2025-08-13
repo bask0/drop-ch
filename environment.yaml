@@ -7,7 +7,7 @@ channels:
 dependencies:
   - python=3.11
   - pytorch
-  - pytorch-cuda=11.7
+  - pytorch-cuda=12.8
   - torchvision
   - torchaudio
   - pytorch-sparse
@@ -23,6 +23,7 @@ dependencies:
   - netcdf4
   - zarr
   - geopandas
+  - pyreadr
   - richdem
   - matplotlib
   - seaborn
@@ -38,7 +39,6 @@ dependencies:
   - pip
   - pip:
     - dask-labextension
-    - pyreadr
     - tensorboard
     - flake8
     - kaleido
