@@ -89,7 +89,6 @@ class HRUSample:
     tair: Tensor | None
     hru_index: Tensor
     hru_area: Tensor
-    q95: Tensor
     is_lake: Tensor | None
     water_freq: Tensor | None
     time_slice: list[int]
