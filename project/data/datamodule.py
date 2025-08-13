@@ -103,9 +103,6 @@ class HRUData(InMemoryDataset):
             hru_subset: list[int] | None = None,
             use_prevah: bool = False,
             aggregate_catchments: bool = False,
-            ds_mean: xr.Dataset | None = None,
-            ds_std: xr.Dataset | None = None,
-            q95: xr.Dataset | None = None,
             transform: None | Callable = None):
         """
         Initialize HRUData class.
@@ -127,13 +124,16 @@ class HRUData(InMemoryDataset):
                 sometimes want to compute the domain in one forward step.
             use_prevah (bool): whether to use the prevah discharge as target.
             aggregate_catchments (bool): whether to aggregate catchments.
-            ds_mean (xr.Dataset): mean values for normalization.
-            ds_std (xr.Dataset): standard deviation values for normalization.
-            q95 (xr.Dataset): 95th percentile values for normalization.
             transform (None | Callable): transformation to apply to the data.
         """
 
         super().__init__(transform=transform)
+
+        # The area corresponds to the upstream area if we use aggregated HSUs.
+        if aggregate_catchments and 'upstream_area' not in stat_features:
+            raise ValueError(
+                "When using aggregate_catchments, 'upstream_area' must be included in the static features."
+            )
 
         self.stat_features = stat_features
         self.stat_routing_features = stat_routing_features if stat_routing_features is not None else stat_features
@@ -154,6 +154,13 @@ class HRUData(InMemoryDataset):
         )
         ds.Q_obs_m3s.load()
         ds.Q_obs_mmd.load()
+
+        if self.use_prevah:
+            self.target = 'q_prevah_mmd'
+        elif self.aggregate_catchments:
+            self.target = 'Q_obs_mmd'
+        else:
+            self.target = 'Q_obs_m3s'
 
         # Determine which HRUs have observations
         if self.use_prevah:
@@ -203,37 +210,6 @@ class HRUData(InMemoryDataset):
 
         self.ds = ds
         self.ds['has_any_obs'] = ds.Q_obs_m3s.notnull().any('hru').compute()
-
-        # Upstream area computation is commented out for efficiency
-
-        # Ensure all or none of ds_mean, ds_std, q95 are provided
-        if (ds_mean is None) != (ds_std is None) != (q95 is None):
-            raise ValueError(
-                'pass either none of `ds_mean`, `ds_std`, and `q95`, or all.'
-            )
-
-        # Compute normalization statistics if not provided
-        if ds_mean is None:
-            variables = self.all_features
-            ds_stats = self.ds if self.hru_subset is None else self.ds.sel(hru=self.hru_subset)
-            ds_mean = ds_stats[variables].mean().compute()
-            ds_std = ds_stats[variables].std().compute()
-
-            if self.aggregate_catchments and ('area' in self.stat_features):
-                ds_mean['area'] = self.ds.upstream_area.mean().compute()
-                ds_std['area'] = self.ds.upstream_area.std().compute()
-
-            # Compute q95 for normalization, depending on mode
-            if self.aggregate_catchments:
-                q95 = ds.Q_obs_mmd.quantile(0.95).item()
-            elif self.use_prevah:
-                q95 = ds.q_prevah_mmd.quantile(0.95).item()
-            else:
-                q95 = ds.Q_obs_m3s.quantile(0.95).item()
-
-        self.ds_mean = assert_non_NaN(ds_mean)
-        self.ds_std = assert_non_NaN(ds_std)
-        self.q95 = assert_non_NaN(q95)
 
     def len(self) -> int:
         """Return the number of samples in the dataset."""
@@ -299,21 +275,14 @@ class HRUData(InMemoryDataset):
             relabel_nodes=True)
 
         # hrus x 1
-        hru_area = self.get_ds_feature('area', hru=subset)
-        assert hru_area is not None, 'No area feature found in dataset.'
-        hru_area_sum = hru_area.sum()
+        hru_area = assert_non_NaN(self.get_ds_feature('area', hru=subset))
+        upstream_area = assert_non_NaN(self.get_ds_feature('upstream_area', hru=hru_idx))
 
         # num static
-        x = (self.get_stat_features(hru=subset) * hru_area[:, None]).sum(0) / hru_area_sum
-
-        area_idx = [i for i, feature in enumerate(self.stat_features) if feature == 'area']
-
-        if len(area_idx) == 1:
-            area_idx = area_idx[0]
-            x[area_idx] = (hru_area_sum - self.ds_mean['area'].values) / self.ds_std['area'].values
+        x = (self.get_stat_features(hru=subset) * hru_area[:, None]).sum(0) / upstream_area
 
         # time x 1
-        d = (self.get_dyn_features(hru=subset) * hru_area[:, None, None]).sum(0) / hru_area_sum
+        d = (self.get_dyn_features(hru=subset) * hru_area[:, None, None]).sum(0) / upstream_area
 
         # time x 1
         Q_obs = assert_non_NaN(self.get_q_obs(hru=hru_idx))
@@ -346,7 +315,6 @@ class HRUData(InMemoryDataset):
             hru_area=upstream_area,
             is_lake=is_lake,
             water_freq=water_freq,
-            q95=torch.tensor(self.q95),
             time_slice=time_slice_serialized
         )
 
@@ -414,7 +382,6 @@ class HRUData(InMemoryDataset):
             tair=tair,
             hru_index=hru_idx,
             hru_area=hru_area,
-            q95=torch.tensor(self.q95),
             is_lake=is_lake,
             water_freq=water_freq,
             time_slice=time_slice_serialized
@@ -804,8 +771,7 @@ class HRUData(InMemoryDataset):
             Tensor | None: The selected data as a PyTorch tensor, or None if unavailable.
         """
 
-        # x = self.qnormalize(self.ds[['Q_obs']].isel(**isel))
-        x = self.ds[['Q_obs_m3s']].isel(**isel)
+        x = self.ds[[self.target]].isel(**isel)
 
         return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
 
@@ -850,10 +816,6 @@ class HRUData(InMemoryDataset):
             Tensor | None: Tensor of static features.
         """
 
-        if self.stat_features is None:
-            return None
-
-        # x = self.standardize(self.ds[self.stat_features].isel(**isel))
         x = self.ds[self.stat_features].isel(**isel)
 
         return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
@@ -872,7 +834,6 @@ class HRUData(InMemoryDataset):
         if self.stat_routing_features is None:
             return None
 
-        # x = self.standardize(self.ds[self.stat_routing_features].isel(**isel))
         x = self.ds[self.stat_routing_features].isel(**isel)
 
         return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
@@ -888,10 +849,11 @@ class HRUData(InMemoryDataset):
             Tensor | None: Tensor of static edge features.
         """
 
+        raise NotImplementedError('edge features not implemented yet.')
+
         if self.stat_edge_features is None:
             return None
 
-        # x = self.standardize(self.ds[self.stat_edge_features].isel(**isel))
         x = self.ds[self.stat_edge_features].isel(**isel)
 
         return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
@@ -907,10 +869,6 @@ class HRUData(InMemoryDataset):
             Tensor | None: Dynamic feature tensor with dimensions (HRU, time, variable).
         """
 
-        if self.dyn_features is None:
-            return None
-
-        # x = self.standardize(self.ds[self.dyn_features].isel(**isel))
         x = self.ds[self.dyn_features].isel(**isel)
 
         return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
@@ -949,21 +907,6 @@ class HRUData(InMemoryDataset):
             return self.darray2tensor(
                 self.ds[feature].isel(**isel).to_array('variable').transpose(
                     ..., 'time', 'variable', missing_dims='ignore'))
-
-    def standardize(self, ds: xr.Dataset) -> xr.Dataset:
-        """
-        Apply standard normalization to a dataset using stored means and standard deviations.
-
-        Args:
-            ds (xr.Dataset): Dataset to normalize.
-
-        Returns:
-            xr.Dataset: Standardized dataset.
-        """
-
-        variables = list(ds.data_vars)
-
-        return (ds[variables] - self.ds_mean[variables]) / self.ds_std[variables]
 
     @staticmethod
     def darray2tensor(x: xr.DataArray | None) -> Tensor | None:
@@ -1058,23 +1001,6 @@ class HRUData(InMemoryDataset):
         )
         return subset.cpu().tolist()
 
-    def get_upstream_area(self, hru_i: int) -> float:
-        """
-        Compute the total upstream area for a given HRU index.
-
-        This method retrieves all upstream HRUs and sums their area values.
-
-        Args:
-            hru_i (int): Index of the HRU.
-
-        Returns:
-            float: Sum of the areas of all upstream HRUs.
-        """
-
-        subset = self.get_upstream_samples(hru_i=hru_i)
-
-        return self.ds.isel(hru=subset).area.sum().item()
-
     @property
     def num_stat_features(self) -> int:
         """Get the number of static features.
@@ -1160,17 +1086,15 @@ class GraphDataModule(pl.LightningDataModule):
         pred_catchments (np.ndarray or xarray.DataArray): Catchments for prediction or all outlets if
             aggregate_catchments is False.
         stat_features (list[str]): Static features used.
-        stat_routing_features (list[str]): Static routing features used.
-        dyn_features (list[str] or None): Dynamic features used.
+        stat_routing_features (list[str] | None): Static routing features used.
+        dyn_features (list[str]): Dynamic features used.
+        norm_targets (bool): Whether to normalize target variables. Defaults to True.
         aggregate_catchments (bool): Whether to aggregate predictions at the catchment level.
         k_hops (int): Number of hops for subgraph extraction.
         temporal_context_length (int): Temporal context window length.
         prediction_length (int): Prediction window length.
         batch_size (int): Batch size for data loading.
         num_workers (int): Number of worker processes for data loading.
-        ds_mean (np.ndarray): Mean values of the dataset features (from training set).
-        ds_std (np.ndarray): Standard deviation of the dataset features (from training set).
-        q95 (float): 95th percentile of observed streamflow (from training set).
 
     Notes:
     ------
@@ -1184,8 +1108,9 @@ class GraphDataModule(pl.LightningDataModule):
         self,
         data_path: str,
         stat_features: list[str],
+        dyn_features: list[str],
         stat_routing_features: list[str] | None = None,
-        dyn_features: list[str] | None = None,
+        norm_targets: bool = True,
         split_mode: Literal['easy', 'hard', 'random'] = 'random',
         aggregate_catchments: bool = False,
         k_hops: int = 10,
@@ -1201,10 +1126,9 @@ class GraphDataModule(pl.LightningDataModule):
         Args:
             data_path (str): Path to the dataset directory.
             stat_features (list[str]): List of static feature names to use.
-            stat_routing_features (list[str] | None, optional): List of static routing feature names. If None, uses
-                stat_features.
-            dyn_features (list[str] | None, optional): List of dynamic feature names. If None, dynamic features
-                are not used.
+            stat_routing_features (list[str] | None): List of static routing feature names or None, defaults to None.
+            dyn_features (list[str]): List of dynamic feature names.
+            norm_targets (bool, optional): Whether to normalize target variables. Defaults to True.
             split_mode (str, optional): Mode for splitting the dataset. Options are 'random', 'easy', or 'hard'.
                 See :class:`project.data.splitting.CatchmentSplitter` for more details. Default is 'random'.
             aggregate_catchments (bool, optional): If True, aggregates predictions at the catchment level. Default
@@ -1221,7 +1145,7 @@ class GraphDataModule(pl.LightningDataModule):
 
         super().__init__()
 
-        ds = xr.open_zarr(data_path).sel(ds_subset)
+        ds = xr.open_zarr(data_path)
         if ds_subset is not None:
             ds = ds.sel(**ds_subset)
 
@@ -1319,9 +1243,29 @@ class GraphDataModule(pl.LightningDataModule):
 
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
-        self.ds_mean = train_dataset.ds_mean
-        self.ds_std = train_dataset.ds_std
-        self.q95 = train_dataset.q95
+
+        self.norm_args_dyn_features = Normalize.make_kwargs(
+            ds=train_dataset.ds, norm_variables=self.dyn_features
+        )
+
+        self.norm_args_stat_features = Normalize.make_kwargs(
+            ds=train_dataset.ds, norm_variables=self.stat_features
+        )
+
+        self.norm_args_stat_routing_features = Normalize.make_kwargs(
+            ds=train_dataset.ds, norm_variables=self.stat_routing_features
+        )
+
+        if norm_targets:
+            if self.aggregate_catchments:
+                target = ['Q_obs_mmd']
+            else:
+                target = ['Q_obs_m3s']
+            self.norm_args_targets = RobustStandardize.make_kwargs(
+                ds=train_dataset.ds, norm_variables=target
+            )
+        else:
+            self.norm_args_targets = None
 
     def get_upstream_samples(self, hru_i: int, edge_index: Tensor) -> list[int]:
         """
@@ -1345,26 +1289,6 @@ class GraphDataModule(pl.LightningDataModule):
             directed=False,
         )
         return subset.cpu().tolist()
-
-    def get_upstream_area(self, hru_i: int, edge_index: Tensor) -> float:
-        """
-        Calculate the total upstream area for a given hydrologic response unit (HRU).
-
-        Args:
-            hru_i (int): The index of the HRU for which to compute the upstream area.
-            edge_index (Tensor): A tensor representing the connectivity (edges) between HRUs.
-
-        Returns:
-            float: The sum of the areas of all upstream HRUs, including the specified HRU.
-
-        Notes:
-            This method uses the `get_upstream_samples` function to determine the set of upstream HRUs,
-            then sums their areas using the `area` attribute from the dataset (`self.ds`).
-        """
-
-        subset = self.get_upstream_samples(hru_i=hru_i, edge_index=edge_index)
-
-        return self.ds.isel(hru=subset).area.sum().item()
 
     def get_dataset(self, stage: Literal['init', 'train', 'valid', 'test', 'pred']) -> HRUData:
         """
@@ -1415,9 +1339,6 @@ class GraphDataModule(pl.LightningDataModule):
             hru_subset=hru_subset,  # type: ignore
             hru_samples=hru_samples,  # type: ignore
             aggregate_catchments=self.aggregate_catchments,
-            ds_mean=None if stage == 'init' else self.ds_mean,
-            ds_std=None if stage == 'init' else self.ds_std,
-            q95=None if stage == 'init' else self.q95,
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -1504,6 +1425,55 @@ class GraphDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             worker_init_fn=suppress_sparse_csc_warning)
 
+    @property
+    def num_stat_features(self) -> int:
+        """Get the number of static features.
+
+        Returns:
+            int: The number of static features defined in the dataset.
+        """
+
+        if self.stat_features is None:
+            return 0
+
+        return len(self.stat_features)
+
+    @property
+    def num_stat_routing_features(self) -> int:
+        """Get the number of static features.
+
+        Returns:
+            int: The number of static features defined in the dataset.
+        """
+
+        if self.stat_routing_features is None:
+            return 0
+
+        return len(self.stat_routing_features)
+
+    @property
+    def num_dyn_features(self) -> int:
+        """Get the number of dynamic features.
+
+        Returns:
+            int: The number of dynamic features defined in the dataset.
+        """
+
+        if self.dyn_features is None:
+            return 0
+
+        return len(self.dyn_features)
+
+    @property
+    def num_targets(self) -> int:
+        """Get the number of target features.
+
+        Returns:
+            int: The number of target features defined in the dataset.
+        """
+
+        return 1
+
 
 class HRUDataModule(pl.LightningDataModule):
     """
@@ -1526,7 +1496,7 @@ class HRUDataModule(pl.LightningDataModule):
     -----------
     ds : xr.Dataset
         The full xarray dataset loaded from disk.
-    norm_args_features : dict or None
+    norm_args_dyn_features : dict or None
         Normalization arguments for dynamic features, computed from training data.
     norm_args_stat_features : dict or None
         Normalization arguments for static features, computed from training data.
@@ -1544,15 +1514,11 @@ class HRUDataModule(pl.LightningDataModule):
         stat_features: list[str],
         dyn_features: list[str],
         targets: list[str] | None,
-        norm_features: bool = True,
-        norm_stat_features: bool = True,
         norm_targets: bool = True,
         temporal_context_length: int = 100,
         prediction_length: int = 20,
         batch_size: int = 32,
         num_workers: int = 4,
-        num_cv_folds: int = 1,  # lagacy, keep for compatibility and delete later
-        fold_nr: int = 0,  # lagacy, keep for compatibility and delete later
     ) -> None:
         """
         Initialize the HRUDataModule.
@@ -1569,15 +1535,11 @@ class HRUDataModule(pl.LightningDataModule):
             stat_features (list[str]): List of static (non-temporal) feature names to include.
             dyn_features (list[str]): List of dynamic (temporal) feature names to include.
             targets (list[str], optional): List of target variables to predict. Defaults to ['q_prevah_mmd'].
-            norm_features (bool, optional): Whether to normalize dynamic input features. Defaults to True.
-            norm_stat_features (bool, optional): Whether to normalize static features. Defaults to True.
             norm_targets (bool, optional): Whether to normalize target variables. Defaults to True.
             temporal_context_length (int, optional): Number of past time steps to use as input. Defaults to 100.
             prediction_length (int, optional): Number of future time steps to predict. Defaults to 20.
             batch_size (int, optional): Batch size used in data loaders. Defaults to 32.
             num_workers (int, optional): Number of workers for data loading. Defaults to 4.
-            num_cv_folds (int, optional): Legacy argument for cross-validation (unused). Defaults to 1.
-            fold_nr (int, optional): Legacy argument for cross-validation (unused). Defaults to 0.
 
         Notes:
             - HRU selection is done via slicing the dataset using xarray's `.sel()` based on the HRU IDs.
@@ -1607,23 +1569,14 @@ class HRUDataModule(pl.LightningDataModule):
 
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
-        # self.ds_mean = train_dataset.ds_mean
-        # self.ds_std = train_dataset.ds_std
-        # self.q95 = train_dataset.q95
 
-        if norm_features:
-            self.norm_args_features = Normalize.make_kwargs(
-                ds=train_dataset.ds, norm_variables=self.dyn_features
-            )
-        else:
-            self.norm_args_features = None
+        self.norm_args_dyn_features = Normalize.make_kwargs(
+            ds=train_dataset.ds, norm_variables=self.dyn_features
+        )
 
-        if norm_stat_features and (self.stat_features is not None):
-            self.norm_args_stat_features = Normalize.make_kwargs(
-                ds=train_dataset.ds, norm_variables=self.stat_features
-            )
-        else:
-            self.norm_args_stat_features = None
+        self.norm_args_stat_features = Normalize.make_kwargs(
+            ds=train_dataset.ds, norm_variables=self.stat_features
+        )
 
         if norm_targets:
             self.norm_args_targets = RobustStandardize.make_kwargs(
