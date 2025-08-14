@@ -157,10 +157,13 @@ class HRUData(InMemoryDataset):
 
         if self.use_prevah:
             self.target = 'q_prevah_mmd'
+            self.save_variables = [self.target]
         elif self.aggregate_catchments:
             self.target = 'Q_obs_mmd'
+            self.save_variables = [self.target]
         else:
             self.target = 'Q_obs_m3s'
+            self.save_variables = [self.target]
 
         # Determine which HRUs have observations
         if self.use_prevah:
@@ -286,9 +289,6 @@ class HRUData(InMemoryDataset):
 
         # time x 1
         Q_obs = assert_non_NaN(self.get_q_obs(hru=hru_idx))
-
-        # 1
-        upstream_area = assert_non_NaN(self.get_ds_feature('upstream_area', hru=hru_idx))
 
         # 1
         is_lake = assert_non_NaN(self.get_ds_feature('is_lake', hru=hru_idx)).type(x.dtype)
@@ -1076,9 +1076,9 @@ class GraphDataModule(pl.LightningDataModule):
 
     Attributes:
     -----------
-        hru_subset_train (np.ndarray): HRUs used for training.
-        hru_subset_valid (np.ndarray): HRUs used for validation.
-        hru_subset_test (np.ndarray): HRUs used for testing.
+        train_hrus (np.ndarray): HRUs used for training.
+        valid_hrus (np.ndarray): HRUs used for validation.
+        test_hrus (np.ndarray): HRUs used for testing.
         ds (xarray.Dataset): The loaded dataset with HRU coordinates.
         train_catchments (dict[str, int]): Training catchments.
         valid_catchments (list[int]): Validation catchments or all unique catchments if random_catchments is True.
@@ -1118,7 +1118,9 @@ class GraphDataModule(pl.LightningDataModule):
         prediction_length: int = 20,
         batch_size: int = 32,
         num_workers: int = 4,
-        ds_subset: dict | None = None
+        ds_subset: dict | None = None,
+        num_folds: int = 1,  # Keep for compatibility, not used in this class.
+        fold_idx: int = 0,  # Keep for compatibility, not used in this class.
     ) -> None:
         """
         Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
@@ -1218,9 +1220,9 @@ class GraphDataModule(pl.LightningDataModule):
             valid_subset_hru = np.unique(ds.hru.isel(hru=valid_subset_hru_i).values)
             test_subset_hru = np.unique(ds.hru.isel(hru=test_subset_hru_i).values)
 
-        self.hru_subset_train = train_subset_hru
-        self.hru_subset_valid = valid_subset_hru
-        self.hru_subset_test = test_subset_hru
+        self.train_hrus = train_subset_hru
+        self.valid_hrus = valid_subset_hru
+        self.test_hrus = test_subset_hru
 
         self.ds = ds
 
@@ -1302,19 +1304,19 @@ class GraphDataModule(pl.LightningDataModule):
         """
 
         if stage in ['init', 'train']:
-            hru_subset = self.hru_subset_train
+            hru_subset = self.train_hrus
             hru_samples = None
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
             temporal_subset = slice(None, None)
         elif stage == 'valid':
-            hru_subset = self.hru_subset_valid
+            hru_subset = self.valid_hrus
             hru_samples = None if self.aggregate_catchments else self.valid_catchments
             temporal_context_length = -1
             prediction_length = -1
             temporal_subset = slice('2004', '2008')
         elif stage == 'test':
-            hru_subset = self.hru_subset_test
+            hru_subset = self.test_hrus
             hru_samples = None if self.aggregate_catchments else self.test_catchments
             temporal_context_length = -1
             prediction_length = -1
