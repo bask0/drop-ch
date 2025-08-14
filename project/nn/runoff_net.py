@@ -5,12 +5,12 @@ import torch
 from torch import Tensor
 from torch.optim.adamw import AdamW
 from torch.optim.optimizer import Optimizer
-from torch_geometric.data import Batch
 
 from project.nn.base import LightningModuleWithSummary
 from project.nn.models.runoff_model import RunoffModel
 from project.utils.torch.loss import RegressionLoss
 from project.utils.unit_conversion import convert_mmd_to_m3s
+from project.utils.typing import HRUSample
 
 
 class RunoffNet(LightningModuleWithSummary):
@@ -37,7 +37,7 @@ class RunoffNet(LightningModuleWithSummary):
             prediction_length: int | None = None,
             normalize_runoff: bool = False,
             use_precip_as_lake_runoff: bool = False,
-            log_transform: bool = True,
+            log_transform: bool = False,
             norm_args_stat_features: dict | None = None,
             norm_args_dyn_features: dict | None = None,
             norm_args_targets: dict | None = None,
@@ -126,7 +126,7 @@ class RunoffNet(LightningModuleWithSummary):
 
         self.loss_fun = RegressionLoss(criterion='l2', log_transform=log_transform)
 
-    def log_loss(self, loss: dict[str, Tensor], batch: Batch, mode: Literal['train', 'valid', 'test']) -> None:
+    def log_loss(self, loss: dict[str, Tensor], batch: HRUSample, mode: Literal['train', 'valid', 'test']) -> None:
         """
         Log loss values for a given training phase.
 
@@ -164,7 +164,7 @@ class RunoffNet(LightningModuleWithSummary):
 
         return self.runoff_lstm(*args, **kwargs)
 
-    def common_step(self, batch: Batch, subset: Tensor | None, chunked: bool) -> tuple[Tensor, Tensor]:
+    def common_step(self, batch: HRUSample, subset: Tensor | None, chunked: bool) -> tuple[Tensor, Tensor]:
         """
         Shared logic for forward pass and loss computation.
 
@@ -194,13 +194,9 @@ class RunoffNet(LightningModuleWithSummary):
             y_hat = self.runoff_lstm(batch=batch, scale_output=False, subset=subset)
 
         y = cast(Tensor, batch.y)  # type: ignore
-        hru_area = cast(Tensor, batch.hru_area)  # type: ignore
 
         if subset is not None:
             y = y[subset]
-            hru_area = hru_area[subset, None, None]
-        else:
-            hru_area = hru_area[:, None, None]
 
         if self.normalize_runoff:
             y = self.runoff_lstm.norm.norm_targets(y)
@@ -214,7 +210,7 @@ class RunoffNet(LightningModuleWithSummary):
 
     def training_step(
             self,
-            batch: Batch,
+            batch: HRUSample,
             batch_idx: int) -> Tensor:
         """
         Perform a single training step.
@@ -236,13 +232,13 @@ class RunoffNet(LightningModuleWithSummary):
 
         _, loss = self.common_step(batch, subset=None, chunked=False)
 
-        self.log_loss(loss={'qloss': loss}, mode='train', batch=batch)
+        self.log_loss(loss={'loss': loss}, mode='train', batch=batch)
 
         return loss
 
     def validation_step(
             self,
-            batch: Batch,
+            batch: HRUSample,
             batch_idx: int) -> Tensor:
         """
         Perform a single validation step.
@@ -264,13 +260,13 @@ class RunoffNet(LightningModuleWithSummary):
 
         _, loss = self.common_step(batch, subset=None, chunked=False)
 
-        self.log_loss(loss={'qloss': loss}, mode='valid', batch=batch)
+        self.log_loss(loss={'loss': loss}, mode='valid', batch=batch)
 
         return loss
 
     def predict_step(
             self,
-            batch: Batch,
+            batch: HRUSample,
             batch_idx: int) -> dict[str, Tensor]:
         """
         Generate predictions for a batch.
@@ -285,10 +281,16 @@ class RunoffNet(LightningModuleWithSummary):
         Returns
         -------
         dict[str, Tensor]
-            - 'q_pred_mmd': Predicted runoff in mm/day.
-            - 'q_pred_m3s': Predicted runoff in m³/s.
+            - 'Q_pred_mmd': Predicted runoff in mm/day.
+            - 'Q_pred_m3s': Predicted runoff in m³/s.
             - 'batch': Original batch (on CPU for easier downstream use).
         """
+
+        # 1) For varaible naming: is it q (prevah) or Q (observations)?
+        # 2) How to convert to m³/s? hru_area or upstream_area?
+
+        dataset = self.trainer.predict_dataloaders.dataset  # type: ignore
+        runoff_varname = 'q' if dataset.use_prevah else 'Q'
 
         y_hat_mmd, _ = self.common_step(batch, subset=None, chunked=False)
 
@@ -299,8 +301,8 @@ class RunoffNet(LightningModuleWithSummary):
         y_hat_m3s = convert_mmd_to_m3s(y_hat_mmd, area)
 
         return_dict = {
-            'q_pred_mmd': y_hat_mmd,
-            'q_pred_m3s': y_hat_m3s,
+            f'{runoff_varname}_pred_mmd': y_hat_mmd,
+            f'{runoff_varname}_pred_m3s': y_hat_m3s,
             'batch': batch
         }
 
