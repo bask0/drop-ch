@@ -24,9 +24,14 @@ import optuna
 from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 
 from project.core.cli_interface import CLI
+from project.utils.plotting import (
+    plot_metric_cdf,
+    plot_optuna_summary,
+    plot_predictions,
+)
 
 if TYPE_CHECKING:
-    from optuna import Trial
+    from optuna import Study, Trial
 
 logger = logging.getLogger("lightning.pytorch")
 
@@ -103,7 +108,6 @@ class TuningEngine:
             search_space: dict,
             exp_dir: PathLike | str,
             log_dir: PathLike | str,
-            study_name: str = "default_study",
             n_trials: int = 10,
             num_folds: int | None = None,
             monitor: str = 'val_loss',
@@ -119,7 +123,6 @@ class TuningEngine:
             search_space (dict): The hyperparameter search space as a dictionary.
             exp_dir (PathLike | str): Path to the experiment directory where results and configurations will be saved.
             log_dir (PathLike | str): Path to the logging directory for storing logs and Optuna databases.
-            study_name (str, optional): Name of the Optuna study. Defaults to "default_study".
             n_trials (int, optional): Number of trials to run for hyperparameter optimization. Defaults to 10.
             num_folds (int | None): Number of folds for cross-validation. Must be specified.
             monitor (str, optional): Metric to monitor for optimization. Defaults to 'val_loss'.
@@ -138,7 +141,6 @@ class TuningEngine:
         self.search_space = self._flatten_dict(search_space)
         self.exp_dir = Path(exp_dir)
         self.log_dir = Path(log_dir)
-        self.study_name = study_name
         self.n_trials = n_trials
         self.num_folds = num_folds
         self.monitor = monitor
@@ -235,6 +237,9 @@ class TuningEngine:
             best_config_path = best_log_dir / "config.yaml"
             shutil.copy(best_config_path, self.best_config_path)
 
+            logger.info(f"Creating summary plots in '{self.tune_dir}'...")
+            plot_optuna_summary(self.tune_db, study_name=self.EXPERIMENT_NAME, is_xval=False)
+
         return study
 
     def xval(self) -> optuna.Study:
@@ -245,7 +250,14 @@ class TuningEngine:
             optuna.Study: The Optuna study object containing the results of the cross-validation run.
         """
 
-        return self.run(is_tune=False)
+        study = self.run(is_tune=False)
+
+        logger.info(f"Creating summary plots in '{self.xval_dir}'...")
+        plot_optuna_summary(self.xval_db, study_name=self.EXPERIMENT_NAME, is_xval=True)
+        plot_metric_cdf(self.xval_dir)
+        plot_predictions(self.xval_dir)
+
+        return study
 
     def run(self, is_tune: bool = True) -> optuna.Study:
         """
@@ -279,11 +291,31 @@ class TuningEngine:
             sampler=sampler,
             pruner=pruner,
         )
+
         study.optimize(
             func=lambda trial: self.objective(trial, is_tune),
             n_trials=self.n_trials if is_tune else self.num_folds,
         )
         return study
+
+    def _add_user_attrs(self, study: 'Study') -> None:
+        """
+        Add user attributes to the Optuna study.
+
+        Args:
+            study (Study): The Optuna trial object to which attributes will be added.
+            **kwargs: Key-value pairs of attributes to add to the trial.
+        """
+        def to_plain(v):
+            return str(v) if isinstance(v, Path) else v
+
+        names = [
+            'exp_dir', 'log_dir', 'num_folds', 'monitor', 'best_config_path',
+            'tune_dir', 'tune_db', 'xval_dir', 'xval_db'
+        ]
+
+        for name in names:
+            study.set_user_attr(key=name, value=to_plain(getattr(self, name)))
 
     def objective(self, trial: 'Trial', is_tune: bool) -> float:
         """
@@ -534,12 +566,13 @@ class TuningEngine:
         """
 
         try:
-            optuna.create_study(
+            study = optuna.create_study(
                 study_name=self.EXPERIMENT_NAME,
                 storage=self._get_storage(db_path=db_path),
                 direction="minimize",
                 load_if_exists=False,
             )
+            self._add_user_attrs(study=study)
             logger.info("Created new Optuna study.")
         except optuna.exceptions.DuplicatedStudyError:
             logger.info("Optuna study already exists — skipping creation.")
