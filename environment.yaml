@@ -13,10 +13,11 @@ dependencies:
   - torchaudio
   - pytorch-cuda=12.4
 
-  # --- PyTorch Geometric (meta-package resolves torch-scatter/sparse/etc.) ---
-  - pyg
+  # --- PyTorch Geometric (explicit) ---
+  - torch-geometric
 
   # --- Other deps ---
+  - pytorch-sparse
   - lightning
   - numpy
   - scikit-learn
