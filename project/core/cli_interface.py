@@ -139,6 +139,8 @@ class CLI(LightningCLI):
             'data.num_stat_routing_features', 'model.init_args.num_stat_routing_features', apply_on='instantiate')
         parser.link_arguments(
             'data.num_dyn_features', 'model.init_args.num_dynamic_in', apply_on='instantiate')
+        parser.link_arguments(
+            'data.prediction_length', 'model.init_args.prediction_length', apply_on='instantiate')
 
         # Link normalization arguments
         parser.link_arguments(
