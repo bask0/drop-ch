@@ -6,7 +6,7 @@ from project.utils.torch.normalize import DataTansform
 from project.utils.typing import HRUSample
 
 
-class TorchNormalizer(object):
+class TorchNormalizer(torch.nn.Module):
     """Base class implementing data normalization.
 
     Normalization transformation can be applied to dynamic features, static features, static routing features,
@@ -33,6 +33,8 @@ class TorchNormalizer(object):
             norm_args_stat_routing_features: normalization arguments for static routing features, defaults to None.
             norm_args_targets: normalization arguments for targets, defaults to None.
         """
+
+        super().__init__()
 
         if norm_args_dyn_features is not None:
             self.norm_dyn_features = DataTansform(**norm_args_dyn_features)
