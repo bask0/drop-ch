@@ -74,15 +74,15 @@ data:
     temporal_context_length: 365
     prediction_length: 20
     batch_size: 8
-    num_workers: 4
+    num_workers: 8
 
 trainer:
-  max_epochs: 3
+  max_epochs: 1
 
 tuning_engine:
   exp_dir: experiments/lumped
   log_dir: logs/lumped
-  monitor: val_loss
+  monitor: valid_loss
   n_trials: 2
   study_name: study
   num_folds: 1
