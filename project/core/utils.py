@@ -8,8 +8,46 @@ from lightning.pytorch.callbacks import BasePredictionWriter
 import numpy as np
 from torch.utils.data import DataLoader
 import xarray as xr
+from zarr.codecs import BloscCodec, BloscShuffle
 
 logger = logging.getLogger('pytorch_lightning')
+
+
+def get_zarr_v3_encoding(ds: xr.Dataset) -> dict:
+    """Get encoding for the dataset to be saved to zarr.
+
+    This fixes a known issue with the compressor when reading zarr v2 files and writing them with zarr v3.
+
+    Args:
+        ds (xr.Dataset): The dataset to get the encoding for.
+
+    Returns:
+        dict: A dictionary with the encoding for each variable and coordinate in the dataset.
+    """
+
+    encoding = {}
+
+    for var in ds.data_vars:
+        encoding[var] = {
+            "compressors": BloscCodec(
+                cname="zstd",
+                clevel=3,
+                shuffle=BloscShuffle.shuffle
+            ),
+        }
+        ds[var].encoding.pop('compressors', None)
+
+    for coord in ds.coords:
+        encoding[coord] = {
+            "compressors": BloscCodec(
+                cname="zstd",
+                clevel=1,
+                shuffle=BloscShuffle.shuffle
+            ),
+        }
+        ds[coord].encoding.pop('compressors', None)
+
+    return encoding
 
 
 class PredictionWriter(BasePredictionWriter):
@@ -38,7 +76,7 @@ class PredictionWriter(BasePredictionWriter):
         self,
         trainer: 'pl.Trainer',
         pl_module: 'pl.LightningModule',
-        predictions: Sequence[list[dict]],
+        predictions: Sequence[dict],
         batch_indices: Sequence[Any]
     ) -> None:
         """
@@ -64,7 +102,8 @@ class PredictionWriter(BasePredictionWriter):
         pdl = cast(DataLoader, trainer.predict_dataloaders)  # type: ignore
         ds = cast(xr.Dataset, pdl.dataset.ds.copy())  # type: ignore
 
-        variables = datamodule.variables  # type: ignore
+        # Predicted variables to save.
+        variables = [var for var in list(predictions[0].keys()) if var != 'batch']
 
         # Initialize subset and prediction variables
         ds['subset'] = xr.full_like(ds.area, fill_value=0, dtype='int32')
@@ -96,10 +135,12 @@ class PredictionWriter(BasePredictionWriter):
 
         # Keep only selected variables if specified
         if not self.write_all_variables:
-            ds = ds[variables]
+            ds = ds[variables + ['q_prevah_mmd', 'Q_obs_mmd', 'Q_obs_m3s', 'subset']]
+
+        encoding = get_zarr_v3_encoding(ds)
 
         # Write dataset to disk
         write_path = os.path.join(trainer.log_dir, 'preds.zarr')  # type: ignore
-        ds.to_zarr(store=write_path, mode='w')
+        ds.to_zarr(store=write_path, mode='w', encoding=encoding)
 
         logger.info(f"Predictions written to '{write_path}'.")
