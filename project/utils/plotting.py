@@ -1,0 +1,304 @@
+"""Implementation of utility functions for plotting."""
+import os
+from os import PathLike
+from pathlib import Path
+import shutil
+from matplotlib.axes import Axes
+import matplotlib.pyplot as plt
+import numpy as np
+import optuna
+import xarray as xr
+
+from project.utils.data import load_xval_test_set
+from project.utils.metrics import compute_metrics
+
+
+def despine(ax: Axes, which: str = 'L', remove_ticks: bool = False) -> None:
+    """Remove spines from the plot.
+
+    Args:
+        ax (Axes): The axes to modify.
+        which (str): Which spines to remove. Options are 'all' for all spines, or 'L' for left and bottom spines.
+            Defaults to 'all'.
+        remove_ticks (bool): If True, also remove ticks and labels from the axes.
+
+    Raises:
+        NotImplementedError: If `which` is not 'all' or 'L'.
+
+    """
+
+    if which == 'all':
+        spines = ['right', 'top', 'bottom', 'left']
+    elif which == 'L':
+        spines = ['top', 'right']
+    else:
+        NotImplementedError(f'`which`={which} not implemented.')
+
+    ax.spines[spines].set_visible(False)
+
+    if remove_ticks:
+        ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+
+
+OPTUNA_PLOTS_TUNING = [
+    'plot_slice',
+    'plot_contour',
+    'plot_rank',
+    'plot_intermediate_values',
+    'plot_optimization_history',
+    'plot_parallel_coordinate',
+    'plot_param_importances',
+    'plot_timeline',
+]
+
+OPTUNA_PLOTS_XVAL = [
+    'plot_timeline',
+]
+
+
+def _optuna_plots(study: optuna.Study, out_dir: str | PathLike, is_xval: bool = False) -> None:
+    if is_xval:
+        optuna_plots = OPTUNA_PLOTS_XVAL
+    else:
+        optuna_plots = OPTUNA_PLOTS_TUNING
+
+    for optuna_plot in optuna_plots:
+        try:
+            fig = getattr(optuna.visualization, optuna_plot)(study)
+
+            fig.write_image(os.path.join(out_dir, optuna_plot + '.png'), scale=2)
+        except RuntimeError as e:
+            print(
+                'The following RuntimeError was raised (and ignored) for plot \'{optuna_plot}\':\n', e
+            )
+        except ValueError as e:
+            print(
+                'The following ValueError: was raised (and ignored) for plot \'{optuna_plot}\':\n', e
+            )
+
+
+def plot_optuna_summary(study_path: str | PathLike, study_name: str = 'Experiment', is_xval: bool = False) -> None:
+    """Create and save optuna plots for a given study.
+
+    Args:
+        study_path (str | PathLike): Path to the study database.
+        study_name (str): Name of the study. Defaults to 'Experiment'.
+        is_xval (bool): If True, use cross-validation plots. Defaults to False.
+
+    """
+    base_dir = os.path.dirname(study_path)
+    plot_dir = os.path.join(base_dir, 'optuna_plots')
+    os.makedirs(plot_dir, exist_ok=True)
+
+    study = optuna.load_study(study_name=study_name, storage=f'sqlite:///{study_path}')
+
+    _optuna_plots(study=study, out_dir=plot_dir, is_xval=is_xval)
+
+
+def _get_cdf(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, float]:
+    da = da.load()
+    da = da.where(da.notnull(), drop=True)
+    bins = list(sorted(da.values)) + [np.inf]
+    count, bins = np.histogram(da, bins=bins)
+    bins = bins[:-1]
+    pdf = count / sum(count) 
+    cdf = np.cumsum(pdf)
+    xloc = da.median().compute()
+
+    return bins, cdf, xloc.item()
+
+
+def plot_cdf(
+        ds: xr.Dataset,
+        ours_name: str = 'RunoffNet (ours)',
+        save_path: str | PathLike | None = None,
+        title_postfix: str = '',
+        col: str = '#1E88E5') -> None:
+    """Plot the empirical cumulative density function (CDF) of test set metrics.
+
+    Args:
+        ds (xr.Dataset): Dataset containing the metrics to plot.
+        ours_name (str): Name to use in the plot legend for the model being evaluated.
+            Defaults to 'RunoffNet (ours)'.
+        save_path (str | PathLike | None): If provided, the plot will be saved to this path.
+            If None, the plot will not be saved. Defaults to None.
+        title_postfix (str): Postfix to add to the plot title. Defaults to ''.
+        col (str): Color to use for the plot lines. Defaults to '#1E88E5'.
+
+    """
+
+    metrics = list(ds.data_vars)
+
+    num_metrics = len(metrics)
+
+    fig, axes = plt.subplots(
+        1, num_metrics, figsize=(3 * num_metrics, 4), sharey='row', squeeze=False, gridspec_kw={})
+
+    annot_kwargs = dict(
+        textcoords='offset points', ha='center', va='bottom', color='0.2',
+        fontsize=9
+    )
+
+    for i, metric in enumerate(metrics):
+        ax = axes[0, i]
+        da = ds[metric]
+
+        name = da.attrs.get('long_name', metric)
+
+        bins, cdf, xloc = _get_cdf(da)
+        ax.plot(bins, cdf, label=ours_name, color=col, alpha=0.7)
+        ax.axvline(xloc, ymin=0, ymax=0.5, color=col, ls=':', alpha=0.7)
+        ax.annotate(
+            f'{xloc:0.2f}', xy=(xloc, 0.5),
+            xytext=(-40, +15),
+            bbox=dict(boxstyle='round,pad=0.2', fc=col, ec='none', alpha=0.5),
+            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.2', color=col, alpha=0.7),
+            **annot_kwargs)
+
+        ax.axhline(0.5, ls=':', color='k', alpha=0.7)
+
+        ax.set_xlabel(name)
+        despine(ax)
+
+    axes[0, 0].set_ylabel('Empirical cumulative density')
+    axes[0, -1].legend(frameon=False, fontsize=9)
+
+    fig.suptitle('Station-level model comparison' + title_postfix)
+
+    fig.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+
+
+def _infer_obs_pred_vars(ds: xr.Dataset, obs_var: str = 'auto', pred_var: str = 'auto') -> tuple[str, str]:
+    """Infer observation and prediction variable names from the dataset attributes.
+
+    Args:
+        ds (xr.Dataset): Dataset containing the variables.
+        obs_var (str): Observation variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+        pred_var (str): Prediction variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+
+    Returns:
+        tuple[str, str]: Tuple containing the observation and prediction variable names.
+
+    Raises:
+        ValueError: If the dataset does not contain the required attributes or if the variables are not found.
+
+    """
+
+    if obs_var == 'auto':
+        if 'obs_var' not in ds.attrs:
+            raise ValueError(
+                'Dataset does not contain attribute `obs_var`, cannot infer automatically. Pass `obs_var` explicitly.'
+            )
+        obs_var = ds.attrs['obs_var']
+
+    if obs_var not in ds:
+        raise ValueError(f'Observation variable `{obs_var}` not found in dataset.')
+
+    if pred_var == 'auto':
+        if 'pred_var' not in ds.attrs:
+            raise ValueError(
+                'Dataset does not contain attribute `pred_var`, cannot infer automatically. Pass `pred_var` explicitly.'
+            )
+        pred_var = ds.attrs['pred_var']
+
+    if pred_var not in ds:
+        raise ValueError(f'Observation variable `{pred_var}` not found in dataset.')
+
+    return obs_var, pred_var
+
+
+def plot_metric_cdf(
+        xval_dir: str | PathLike,
+        metrics: list[str] | None = None,
+        obs_var: str = 'auto',
+        pred_var: str = 'auto') -> None:
+    """Plot the empirical cumulative density function (CDF) of metrics from cross-validation results.
+
+    The save path is dervied from the `xval_dir` if not provided: [xval_dir]/'metric_plot.png'
+
+    Args:
+        xval_dir (str | PathLike): Directory containing the cross-validation results.
+        metrics (list[str] | None): List of metrics to plot. If None, defaults to
+            ['nse', 'r', 'relbias', 'flv', 'fhv'].
+        obs_var (str): Observation variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+        pred_var (str): Prediction variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+
+    """
+
+    xval_dir = Path(xval_dir)
+
+    if metrics is None:
+        metrics = ['nse', 'r', 'relbias', 'flv', 'fhv']
+
+    ds = load_xval_test_set(xval_dir)
+
+    obs_var, pred_var = _infer_obs_pred_vars(ds, obs_var, pred_var)
+
+    m = compute_metrics(obs=ds[obs_var], mod=ds[pred_var], metrics=metrics, dim='time')
+    plot_cdf(ds=m, save_path=xval_dir / 'metric_plot.png', title_postfix=' (cross-validation test set)')
+
+
+def plot_predictions(
+        xval_dir: str | PathLike,
+        obs_var: str = 'auto',
+        pred_var: str = 'auto') -> None:
+    """Plot observed and predicted time series for each HRU in the cross-validation test set.
+
+    The save path is dervied from the `xval_dir` if not provided: [xval_dir]/ts_plots/[hru_id].png
+
+    Args:
+        xval_dir (str | PathLike): Directory containing the cross-validation results.
+        obs_var (str): Observation variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+        pred_var (str): Prediction variable name. If 'auto', it will be inferred from the dataset attributes.
+            Defaults to 'auto'.
+    """
+
+    xval_dir = Path(xval_dir)
+
+    save_dir = xval_dir / 'ts_plots'
+    if save_dir.exists():
+        shutil.rmtree(save_dir)
+
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    ds = load_xval_test_set(xval_dir)
+
+    obs_var, pred_var = _infer_obs_pred_vars(ds, obs_var, pred_var)
+
+    units = ds[obs_var].attrs.get('units', '')
+    long_name = ds[obs_var].attrs.get('long_name', obs_var)
+
+    col_obs = 'k'
+    col_mod = '#1E88E5'
+
+    hrus = ds.hru.where(ds.has_obs.load(), drop=True)
+
+    for hru in hrus:
+
+        save_path = save_dir / f'{int(hru.item())}.png'
+
+        ds_hru = ds.sel(hru=hru)
+
+        fig, ax = plt.subplots(figsize=(6, 3))
+
+        ds_hru[obs_var].plot(color=col_obs, lw=1.0, label='Observed', ax=ax)
+        ds_hru[pred_var].plot(color=col_mod, lw=1.0, label='Predicted', ax=ax)
+
+        ax.set_title(f'HRU #{int(hru.item())}')
+        ax.set_ylabel(long_name + f' ({units})')
+        despine(ax)
+        ax.legend(frameon=False, loc='upper center', ncols=2)
+
+        fig.tight_layout()
+
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+
+        plt.close(fig)
