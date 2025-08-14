@@ -102,13 +102,22 @@ class PredictionWriter(BasePredictionWriter):
         pdl = cast(DataLoader, trainer.predict_dataloaders)  # type: ignore
         ds = cast(xr.Dataset, pdl.dataset.ds.copy())  # type: ignore
 
-        # Predicted variables to save.
-        variables = [var for var in list(predictions[0].keys()) if var != 'batch']
+        # Prediction varaibles sample
+        p = predictions[0]['data']
+        save_variables = list(p.keys())
+        reference_variables = [v['obs_counterpart'] for v in p.values()]
+        ds.attrs['description'] = 'StreamflowNet predictions'
+        ds.attrs['obs_var'] = predictions[0]['obs_var']
+        ds.attrs['pred_var'] = predictions[0]['pred_var']
 
         # Initialize subset and prediction variables
         ds['subset'] = xr.full_like(ds.area, fill_value=0, dtype='int32')
-        for var in variables:
-            ds[var] = xr.full_like(ds.Q_obs_m3s, fill_value=np.nan, dtype='float32')
+        for var, ref in zip(save_variables, reference_variables):
+            ds[var] = xr.full_like(ds[ref], fill_value=np.nan, dtype='float32')
+            for attr in ['units', 'long_name']:
+                val = p[var][attr]
+                ds[var].attrs[attr] = val
+                ds[ref].attrs[attr] = val
 
         # Assign subset values based on HRUs from datamodule
         if datamodule.train_hrus is not None:  # type: ignore
@@ -127,15 +136,15 @@ class PredictionWriter(BasePredictionWriter):
                 pred['batch'].time_slice[0][0] + datamodule.temporal_context_length,  # type: ignore
                 pred['batch'].time_slice[1][0]  # type: ignore
             )
-            for var in variables:
+            for var in save_variables:
                 ds[var][{
                     'hru': hru_subset,
                     'time': time_subset
-                }] = pred[var][..., datamodule.temporal_context_length:, 0].T  # type: ignore
+                }] = pred['data'][var]['ds'][..., datamodule.temporal_context_length:, 0].T  # type: ignore
 
         # Keep only selected variables if specified
         if not self.write_all_variables:
-            ds = ds[variables + ['q_prevah_mmd', 'Q_obs_mmd', 'Q_obs_m3s', 'subset']]
+            ds = ds[save_variables + reference_variables + ['subset', 'has_obs']]
 
         encoding = get_zarr_v3_encoding(ds)
 

@@ -290,7 +290,6 @@ class RunoffNet(LightningModuleWithSummary):
         # 2) How to convert to m³/s? hru_area or upstream_area?
 
         dataset = self.trainer.predict_dataloaders.dataset  # type: ignore
-        runoff_varname = 'q' if dataset.use_prevah else 'Q'
 
         y_hat_mmd, _ = self.common_step(batch, subset=None, chunked=False)
 
@@ -300,13 +299,29 @@ class RunoffNet(LightningModuleWithSummary):
         area = batch.hru_area[:, None, None]  # type: ignore
         y_hat_m3s = convert_mmd_to_m3s(y_hat_mmd, area)
 
-        return_dict = {
-            f'{runoff_varname}_pred_mmd': y_hat_mmd,
-            f'{runoff_varname}_pred_m3s': y_hat_m3s,
-            'batch': batch
+        data = {
+            'q_pred_mmd' if dataset.use_prevah else 'Q_pred_mmd': {
+                'ds': y_hat_mmd.to('cpu'),
+                'units': 'mm/day',
+                'long_name': 'Specific runoff' if dataset.use_prevah else 'Specific streamflow',
+                'obs_counterpart': 'q_prevah_mmd' if dataset.use_prevah else 'Q_obs_mmd',
+            },
+            'q_pred_m3s' if dataset.use_prevah else 'Q_pred_m3s': {
+                'ds': y_hat_m3s.to('cpu'),
+                'units': 'm³/s',
+                'long_name': 'Volumetric runoff' if dataset.use_prevah else 'Volumetric streamflow',
+                'obs_counterpart': 'q_prevah_m3s' if dataset.use_prevah else 'Q_obs_m3s'
+            }
         }
 
-        return {k: v.to('cpu') for k, v in return_dict.items()}
+        return_dict = {
+            'data': data,
+            'batch': batch.to('cpu'),
+            'obs_var': 'q_prevah_mmd' if dataset.use_prevah else 'Q_obs_mmd',
+            'pred_var': 'q_pred_mmd' if dataset.use_prevah else 'Q_pred_mmd',
+        }
+
+        return return_dict
 
     def configure_optimizers(self) -> Optimizer:
         """
