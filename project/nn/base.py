@@ -8,6 +8,8 @@ from lightning.pytorch.utilities.model_summary.model_summary import ModelSummary
 class LightningModuleWithSummary(pl.LightningModule):
     """Base Lightning module that includes a method to summarize the model."""
 
+    LOG_WEIGHTS_AND_GRADS = False
+
     def summarize(self) -> str:
         """
         Generate a formatted summary string for the model instance.
@@ -60,6 +62,9 @@ class LightningModuleWithSummary(pl.LightningModule):
     def on_after_backward(self):
         """Log model gradients."""
 
+        if not self.LOG_WEIGHTS_AND_GRADS:
+            return
+
         # Iterating through all parameters
         logger = self.logger
         if logger is None:
@@ -73,6 +78,9 @@ class LightningModuleWithSummary(pl.LightningModule):
 
     def on_after_optimizer_step(self, *args, **kwargs):
         """Log model parameters after optimizer step."""
+
+        if not self.LOG_WEIGHTS_AND_GRADS:
+            return
 
         # Iterating through all parameters
         logger = self.logger
