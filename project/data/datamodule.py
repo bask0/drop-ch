@@ -136,7 +136,7 @@ class HRUData(InMemoryDataset):
             )
 
         self.stat_features = stat_features
-        self.stat_routing_features = stat_routing_features if stat_routing_features is not None else stat_features
+        self.stat_routing_features = stat_routing_features
         self.dyn_features = dyn_features
 
         self.k_hops = k_hops
