@@ -41,29 +41,11 @@ data:
       -  sand_mean
       -  shrubs_freq
       -  silt_mean
-      -  slope_max
       -  slope_mean
-      -  slope_min
       -  upstream_area
       -  water_freq
       -  wetlands_freq
-    stat_routing_features:
-      -  area
-      -  dam_height
-      -  height_max
-      -  height_mean
-      -  height_min
-      -  impoundment_volume
-      -  is_barrage
-      -  is_floodcontrol
-      -  is_hydroelectricity
-      -  is_lake
-      -  is_other_aim
-      -  is_regulated_lake
-      -  is_storage_dam
-      -  slope_mean
-      -  upstream_area
-      -  water_freq
+    stat_routing_features: null
     dyn_features:
       - prec
       - tair
@@ -102,11 +84,35 @@ tuning_engine:
   search_space:
     model:
       learning_rate:
-        method: loguniform
+        method: float
         low: 1e-5
         high: 1e-1
+        log: True
+
+      weight_decay:
+        method: float
+        low: 1e-7
+        high: 1e-1
+        log: True
+
+      dropout:
+        method: float
+        low: 0.0
+        high: 0.4
+
+      enc_dropout:
+        method: float
+        low: 0.0
+        high: 0.4
+
+      lstm_layers:
+        method: int
+        low: 1
+        high: 2
+        step: 1
 
       hidden_size:
-        method: categorical
-        dtype: int
-        choices: [16, 32, 64]
+        method: int
+        low: 64
+        high: 256
+        step: 64
