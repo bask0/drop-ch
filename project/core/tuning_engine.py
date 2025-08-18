@@ -29,6 +29,7 @@ from project.utils.plotting import (
     plot_metric_cdf,
     plot_optuna_summary,
     plot_predictions,
+    plot_xval_sets,
 )
 
 if TYPE_CHECKING:
@@ -289,6 +290,7 @@ class TuningEngine:
         plot_optuna_summary(self.xval_db, study_name=self.EXPERIMENT_NAME, is_xval=True)
         plot_metric_cdf(self.xval_dir)
         plot_predictions(self.xval_dir)
+        plot_xval_sets(self.xval_dir)
 
         return study
 
@@ -658,22 +660,28 @@ class TuningEngine:
         dir.mkdir(parents=True, exist_ok=True)
 
     def _remove_dir(self, dir: Path) -> None:
-        if dir.exists():
-            if self.overwrite:
-                # Attempt to remove the directory and its contents, try twice because soemtimes tensorboard logs
-                # cannot be deleted in the first attempts.
-                shutil.rmtree(dir, ignore_errors=True)
-                time.sleep(2)  # Ensure the directory is fully removed
-                if dir.exists():
-                    shutil.rmtree(dir, ignore_errors=False)
+        """Safely remove a directory and its contents, handling busy files gracefully.
 
-                if dir.exists():
-                    raise OSError(f"Failed to remove directory: {dir}")
-            else:
-                raise FileExistsError(
-                    f"Directory already exists: {dir}. Use overwrite=True or --tuning_engine.overwrite=True "
-                    "from the CLI to remove it."
-                )
+        Args:
+            dir (Path): The directory to remove.
+        """
+
+        if not dir.exists():
+            return
+
+        if not self.overwrite:
+            raise FileExistsError(
+                f"Directory already exists: {dir}. Use overwrite=True or --tuning_engine.overwrite=True "
+                "from the CLI to remove it."
+            )
+
+        # First attempt: ignore errors (for files that may be open)
+        for _ in range(3):
+            shutil.rmtree(dir, ignore_errors=True)
+            time.sleep(2)  # give NFS / open files a chance to release
+
+        if dir.exists():
+            raise OSError(f"Cannot remove directory: {dir}. It may contain busy files or directories.")
 
     @staticmethod
     def _create_symlink(source: Path | str, target: Path | str, force: bool = True) -> None:
