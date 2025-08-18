@@ -64,14 +64,14 @@ tuning_engine:
   exp_dir: experiments/lumped
   log_dir: /net/argon/landclim/kraftb/machflow_routing/logs/lumped
   monitor: valid_loss
-  n_trials: 4
+  n_trials: 40
   num_folds: 1
   overwrite: False
 
   sampler:
     class_path: optuna.samplers.TPESampler
     init_args:
-      n_startup_trials: 10
+      n_startup_trials: 15
       seed: 1
       multivariate: True
 

@@ -1,0 +1,8 @@
+data:
+  class_path: project.data.datamodule.GraphDataModule
+  init_args:
+    split_mode: random
+
+tuning_engine:
+  exp_dir: experiments/lumped/random
+  log_dir: /net/argon/landclim/kraftb/machflow_routing/logs/lumped/random
