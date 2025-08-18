@@ -104,7 +104,7 @@ def _get_cdf(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, float]:
     bins = list(sorted(da.values)) + [np.inf]
     count, bins = np.histogram(da, bins=bins)
     bins = bins[:-1]
-    pdf = count / sum(count) 
+    pdf = count / sum(count)
     cdf = np.cumsum(pdf)
     xloc = da.median().compute()
 
@@ -251,7 +251,8 @@ def plot_metric_cdf(
 def plot_predictions(
         xval_dir: str | PathLike,
         obs_var: str = 'auto',
-        pred_var: str = 'auto') -> None:
+        pred_var: str = 'auto',
+        num_plot: int = 10) -> None:
     """Plot observed and predicted time series for each HRU in the cross-validation test set.
 
     The save path is dervied from the `xval_dir` if not provided: [xval_dir]/ts_plots/[hru_id].png
@@ -262,6 +263,7 @@ def plot_predictions(
             Defaults to 'auto'.
         pred_var (str): Prediction variable name. If 'auto', it will be inferred from the dataset attributes.
             Defaults to 'auto'.
+        num_plot (int): Number of HRUs to plot. Defaults to 10.
     """
 
     xval_dir = Path(xval_dir)
@@ -284,7 +286,10 @@ def plot_predictions(
 
     hrus = ds.hru.where(ds.has_obs.load(), drop=True)
 
-    for hru in hrus:
+    for i, hru in enumerate(hrus):
+
+        if i == num_plot:
+            break
 
         save_path = save_dir / f'{int(hru.item())}.png'
 
@@ -292,8 +297,8 @@ def plot_predictions(
 
         fig, ax = plt.subplots(figsize=(6, 3))
 
-        ds_hru[obs_var].plot(color=col_obs, lw=1.0, label='Observed', ax=ax)
-        ds_hru[pred_var].plot(color=col_mod, lw=1.0, label='Predicted', ax=ax)
+        ds_hru[obs_var].plot(color=col_obs, lw=1.0, label='Observed', ax=ax)  # type: ignore
+        ds_hru[pred_var].plot(color=col_mod, lw=1.0, label='Predicted', ax=ax)  # type: ignore
 
         ax.set_title(f'HRU #{int(hru.item())}')
         ax.set_ylabel(long_name + f' ({units})')
