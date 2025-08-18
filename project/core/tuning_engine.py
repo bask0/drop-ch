@@ -151,7 +151,40 @@ class TuningEngine:
         self.xval_dir = self.log_dir / "xval"
         self.tune_db = self.tune_dir / "optuna.db"
         self.xval_db = self.xval_dir / "optuna.db"
-        self.best_config_path = self.tune_dir / "best_config.yaml"
+
+    @property
+    def best_config_path(self) -> Path:
+        """
+        Path to the best configuration file from tuning.
+
+        Returns:
+            Path: The path to the best configuration file.
+
+        Raises:
+            RuntimeError: If the tuning study cannot be loaded or does not contain the best trial.
+        """
+
+        try:
+            study = optuna.load_study(
+                study_name=self.EXPERIMENT_NAME,
+                storage=self._get_storage(db_path=self.tune_db),
+            )
+
+        except Exception as e:
+            raise RuntimeError("Cannot load tuning study.") from e
+
+        try:
+            log_dir = study.best_trial.user_attrs['log_dir']
+
+        except KeyError as e:
+            raise RuntimeError("Best trial does not have 'log_dir' attribute.") from e
+
+        best_config_path = Path(log_dir) / "config.yaml"
+
+        if not best_config_path.exists():
+            raise RuntimeError(f"Best config file does not exist: {best_config_path}")
+
+        return best_config_path
 
     def setup(self, which: Literal["all", "tune", "xval"]) -> None:
         """
@@ -216,7 +249,7 @@ class TuningEngine:
         try:
             study = self.run(is_tune=True)
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, SystemExit):
             logger.warning("Tuning interrupted by user. Attempting graceful shutdown...")
 
             try:
@@ -232,25 +265,24 @@ class TuningEngine:
             if study is None:
                 raise ValueError("No study was created or loaded. Cannot proceed with finalizing runing.")
 
-            best_trial = study.best_trial
-            best_log_dir = Path(best_trial.user_attrs["log_dir"])
-            best_config_path = best_log_dir / "config.yaml"
-            shutil.copy(best_config_path, self.best_config_path)
-
             logger.info(f"Creating summary plots in '{self.tune_dir}'...")
             plot_optuna_summary(self.tune_db, study_name=self.EXPERIMENT_NAME, is_xval=False)
 
         return study
 
-    def xval(self) -> optuna.Study:
+    def xval(self, use_best_tuning_checkpoint: bool = False) -> optuna.Study:
         """
         Perform cross-validation by running the tuning engine without hyperparameter optimization.
+
+        Args:
+            use_best_tuning_checkpoint (bool, optional): If True, uses the best checkpoint from the tuning run
+                for cross-validation. Defaults to False.
 
         Returns:
             optuna.Study: The Optuna study object containing the results of the cross-validation run.
         """
 
-        study = self.run(is_tune=False)
+        study = self.run(is_tune=False, use_best_tuning_checkpoint=use_best_tuning_checkpoint)
 
         logger.info(f"Creating summary plots in '{self.xval_dir}'...")
         plot_optuna_summary(self.xval_db, study_name=self.EXPERIMENT_NAME, is_xval=True)
@@ -259,13 +291,15 @@ class TuningEngine:
 
         return study
 
-    def run(self, is_tune: bool = True) -> optuna.Study:
+    def run(self, is_tune: bool = True, use_best_tuning_checkpoint: bool = False) -> optuna.Study:
         """
         Run the Optuna study for hyperparameter tuning or cross-validation.
 
         Args:
             is_tune (bool, optional): If True, runs hyperparameter tuning using the configured sampler and pruner.
                 If False, runs cross-validation using brute-force sampling and no pruning. Defaults to True.
+            use_best_tuning_checkpoint (bool, optional): If True, uses the best checkpoint from the tuning run
+                for cross-validation. Defaults to False.
 
         Returns:
             optuna.Study: The Optuna study object after optimization.
@@ -279,8 +313,6 @@ class TuningEngine:
             pruner = self.pruner
             db_path = self.tune_db
         else:
-            if not self.best_config_path.exists():
-                raise FileNotFoundError(f"Best config file does not exist: {self.best_config_path}")
             sampler = optuna.samplers.BruteForceSampler()
             pruner = optuna.pruners.NopPruner()
             db_path = self.xval_db
@@ -293,7 +325,7 @@ class TuningEngine:
         )
 
         study.optimize(
-            func=lambda trial: self.objective(trial, is_tune),
+            func=lambda trial: self.objective(trial, is_tune, use_best_tuning_checkpoint),
             n_trials=self.n_trials if is_tune else self.num_folds,
         )
         return study
@@ -310,14 +342,14 @@ class TuningEngine:
             return str(v) if isinstance(v, Path) else v
 
         names = [
-            'exp_dir', 'log_dir', 'num_folds', 'monitor', 'best_config_path',
+            'exp_dir', 'log_dir', 'num_folds', 'monitor',
             'tune_dir', 'tune_db', 'xval_dir', 'xval_db'
         ]
 
         for name in names:
             study.set_user_attr(key=name, value=to_plain(getattr(self, name)))
 
-    def objective(self, trial: 'Trial', is_tune: bool) -> float:
+    def objective(self, trial: 'Trial', is_tune: bool, use_best_tuning_checkpoint: bool = False) -> float:
         """
         Objective function for Optuna hyperparameter optimization or cross-validation.
 
@@ -334,6 +366,8 @@ class TuningEngine:
         Args:
             trial (Trial): The Optuna trial object containing the current set of hyperparameters.
             is_tune (bool): If True, runs in hyperparameter tuning mode; if False, runs in cross-validation mode.
+            use_best_tuning_checkpoint (bool, optional): If True, uses the best checkpoint from the tuning run
+                for cross-validation. Defaults to False.
 
         Returns:
             float: The best validation loss achieved during the trial.
@@ -384,14 +418,28 @@ class TuningEngine:
             args=args
         )
 
-        # Fit the model
-        cli.trainer.fit(model=cli.model, datamodule=cli.datamodule)
+        if is_tune or (not is_tune and not use_best_tuning_checkpoint):
+            # Fit the model
+            cli.trainer.fit(model=cli.model, datamodule=cli.datamodule)
+            # Save useful info in trial attributes
+            try:
+                best_checkpoint = cli.trainer.checkpoint_callback.best_model_path  # type: ignore
+            except AttributeError:
+                raise AttributeError("No checkpoint callback found; cannot retrieve best model path.")
 
-        # Save useful info in trial attributes
-        try:
-            best_checkpoint = cli.trainer.checkpoint_callback.best_model_path  # type: ignore
-        except AttributeError:
-            raise AttributeError("No checkpoint callback found; cannot retrieve best model path.")
+            # Retrieve the best validation loss from early stopping or logs
+            if hasattr(cli.trainer, "early_stopping_callback") and cli.trainer.early_stopping_callback is not None:
+                val_loss: float = cli.trainer.early_stopping_callback.best_score.item()
+            else:
+                raise ValueError("No early stopping callback found; cannot retrieve best validation loss.")
+        else:
+            # Load the best checkpoint from the tuning run
+            study = optuna.load_study(
+                study_name=self.EXPERIMENT_NAME,
+                storage=self._get_storage(db_path=self.tune_db),
+            )
+            best_checkpoint = study.best_trial.user_attrs['best_checkpoint']
+            val_loss = study.best_value
 
         try:
             log_dir = cli.trainer.logger.log_dir  # type: ignore
@@ -401,12 +449,6 @@ class TuningEngine:
         trial.set_user_attr("best_checkpoint", best_checkpoint)
         trial.set_user_attr("log_dir", log_dir)
         trial.set_user_attr("epoch", cli.trainer.current_epoch)
-
-        # Retrieve the best validation loss from early stopping or logs
-        if hasattr(cli.trainer, "early_stopping_callback") and cli.trainer.early_stopping_callback is not None:
-            val_loss: float = cli.trainer.early_stopping_callback.best_score.item()
-        else:
-            raise ValueError("No early stopping callback found; cannot retrieve best validation loss.")
 
         if not is_tune:
             model = type(cli.model).load_from_checkpoint(best_checkpoint)
