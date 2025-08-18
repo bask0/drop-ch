@@ -1,6 +1,6 @@
 """Defines the RunofNet, a lightnign model with training routing for runoff prediction."""
 
-from typing import Literal, cast
+from typing import Literal
 import torch
 from torch import Tensor
 from torch.optim.adamw import AdamW
@@ -9,8 +9,8 @@ from torch.optim.optimizer import Optimizer
 from project.nn.base import LightningModuleWithSummary
 from project.nn.models.runoff_model import RunoffModel
 from project.utils.torch.loss import RegressionLoss
-from project.utils.unit_conversion import convert_mmd_to_m3s
 from project.utils.typing import HRUSample
+from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
 class RunoffNet(LightningModuleWithSummary):
@@ -185,15 +185,13 @@ class RunoffNet(LightningModuleWithSummary):
             Computed loss value.
         """
 
-        self.save_hyperparameters()
-
         if chunked:
             with torch.no_grad():
                 y_hat = self.runoff_lstm.chunked_forward(batch=batch, scale_output=False, subset=subset)
         else:
             y_hat = self.runoff_lstm(batch=batch, scale_output=False, subset=subset)
 
-        y = cast(Tensor, batch.y)  # type: ignore
+        y = batch.y
 
         if subset is not None:
             y = y[subset]
