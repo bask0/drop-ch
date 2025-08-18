@@ -56,3 +56,29 @@ class LightningModuleWithSummary(pl.LightningModule):
             f.write(self.summarize())
 
         return super().on_train_start()
+
+    def on_after_backward(self):
+        """Log model gradients."""
+
+        # Iterating through all parameters
+        logger = self.logger
+        if logger is None:
+            raise ValueError('`logger` must be set to log parameters.')
+        experiment = logger.experiment  # type: ignore
+
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                if param.grad is not None:
+                    experiment.add_histogram(name + '.grad', param.grad, self.global_step)
+
+    def on_after_optimizer_step(self, *args, **kwargs):
+        """Log model parameters after optimizer step."""
+
+        # Iterating through all parameters
+        logger = self.logger
+        if logger is None:
+            raise ValueError('`logger` must be set to log parameters.')
+        experiment = logger.experiment  # type: ignore
+
+        for name, param in self.named_parameters():
+            experiment.add_histogram(name + '.weight', param, self.global_step)
