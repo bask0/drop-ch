@@ -80,9 +80,9 @@ trainer:
 
 tuning_engine:
   exp_dir: experiments/lumped
-  log_dir: logs/lumped
+  log_dir: /net/argon/landclim/kraftb/machflow_routing/logs/lumped
   monitor: valid_loss
-  n_trials: 15
+  n_trials: 4
   num_folds: 1
   overwrite: False
 
