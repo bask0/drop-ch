@@ -1,9 +1,12 @@
 """Implementation of utility functions for plotting."""
+from glob import glob
 import os
 from os import PathLike
 from pathlib import Path
 import shutil
+import geopandas as gpd
 from matplotlib.axes import Axes
+from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
@@ -296,6 +299,50 @@ def plot_predictions(
         ax.set_ylabel(long_name + f' ({units})')
         despine(ax)
         ax.legend(frameon=False, loc='upper center', ncols=2)
+
+        fig.tight_layout()
+
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+
+        plt.close(fig)
+
+
+def plot_xval_sets(xval_dir: str | PathLike) -> None:
+    """Plot cross-validation sets on a map.
+
+    Args:
+        xval_dir (str | PathLike): Directory containing the cross-validation results.
+    """
+
+    color_mapping = {
+        'None': '#FFFFFF',
+        'Train': '#FFC107',
+        'Valid': '#1E88E5',
+        'Test': '#D81B60'
+    }
+
+    poly = gpd.read_file(
+        '/net/argon/landclim/kraftb/machflow_routing/data/processed/hrus/hrus.gpkg', use_arrow=True).set_index('EZGNR')
+
+    paths = glob(os.path.join(xval_dir, 'fold_*/preds.zarr'))
+
+    for path in paths:
+        ds = xr.open_zarr(path)
+        poly['set'] = ''
+        poly.loc[ds.hru, 'set'] = [list(color_mapping.values())[v] for v in ds.subset.values]
+
+        fig, ax = plt.subplots()
+
+        poly.plot(ec='k', lw=0.1, legend=False, color=poly['set'], ax=ax)
+        despine(ax=ax, which='all', remove_ticks=True)
+
+        # Create legend patches
+        legend_patches = [Patch(color=color, label=category) for category, color in color_mapping.items()]
+
+        # Add the legend to the plot
+        ax.legend(handles=legend_patches, title='CV set', frameon=False, loc='upper left')
+
+        save_path = Path(os.path.dirname(path)) / 'cv_set.png'
 
         fig.tight_layout()
 
