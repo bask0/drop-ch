@@ -76,7 +76,7 @@ class RunoffNet(LightningModuleWithSummary):
                 If True, normalizes runoff targets and predictions during training.
             use_precip_as_lake_runoff : bool, default=False
                 If True, substitutes precipitation data as runoff for lake basins with no observations.
-            log_transform : bool, default=True
+            log_transform : bool, default=False
                 If True, applies a log transform to runoff values in the loss function.
             norm_args_dyn_features:
                 Normalization arguments for dynamic features, defaults to None.
