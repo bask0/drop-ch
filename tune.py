@@ -17,7 +17,7 @@ def main():
     cli = CLI()
     cli.tuning_engine.setup(which="all")
     cli.tuning_engine.tune()
-    cli.tuning_engine.xval()
+    cli.tuning_engine.xval(use_best_tuning_checkpoint=True)
 
 
 if __name__ == "__main__":
