@@ -18,6 +18,7 @@ from os import PathLike
 from pathlib import Path
 import shutil
 import sys
+import time
 from typing import TYPE_CHECKING, Literal
 import warnings
 import optuna
@@ -475,15 +476,21 @@ class TuningEngine:
             tuning_engine:
               search_space:
                 model:
-                  learning_rate:
-                    method: loguniform
-                    low: 1e-5
-                    high: 1e-1
+                    weight_decay:
+                        method: float
+                        low: 1e-7
+                        high: 1e-1
+                        log: True
 
-                  hidden_size:
-                    method: categorical
-                    dtype: int
-                    choices: [16, 32, 64]
+                    dropout:
+                        method: float
+                        low: 0.0
+                        high: 0.5
+
+                    activation:
+                        method: categorical
+                        dtype: str
+                        choices: ['relu', 'tanh', 'sigmoid']
 
         Args:
             trial (Trial): An Optuna Trial object used to suggest parameter values.
@@ -501,17 +508,27 @@ class TuningEngine:
         for key, spec in self.search_space.items():
             suggestion_method = spec["method"]
 
-            if suggestion_method == "loguniform":
-                val = trial.suggest_float(key, float(spec["low"]), float(spec["high"]), log=True)
-            elif suggestion_method == "uniform":
-                val = trial.suggest_float(key, spec["low"], spec["high"])
-            elif suggestion_method == "int":
-                val = trial.suggest_int(key, spec["low"], spec["high"])
-            elif suggestion_method == "categorical":
+            if suggestion_method == 'suggest_categorical':
                 if "dtype" not in spec:
                     raise ValueError(f"Missing 'dtype' for categorical search space: {key}")
                 cast_fn = TYPE_MAP[spec["dtype"]]
                 val = trial.suggest_categorical(key, [cast_fn(val) for val in spec["choices"]])
+            elif suggestion_method in 'suggest_float':
+                kwargs = {
+                    "low": float(spec["low"]),
+                    "high": float(spec["high"]),
+                    "log": spec.get("log", False),
+                    "step": spec.get("step", None),
+                }
+                val = trial.suggest_float(key, **kwargs)
+            elif suggestion_method in 'suggest_int':
+                kwargs = {
+                    "low": spec["low"],
+                    "high": spec["high"],
+                    "log": spec.get("log", False),
+                    "step": spec.get("step", None),
+                }
+                val = trial.suggest_int(key, **kwargs)
             else:
                 raise ValueError(f"Unsupported suggestion method: {suggestion_method}.")
 
@@ -643,7 +660,15 @@ class TuningEngine:
     def _remove_dir(self, dir: Path) -> None:
         if dir.exists():
             if self.overwrite:
-                shutil.rmtree(dir)
+                # Attempt to remove the directory and its contents, try twice because soemtimes tensorboard logs
+                # cannot be deleted in the first attempts.
+                shutil.rmtree(dir, ignore_errors=True)
+                time.sleep(2)  # Ensure the directory is fully removed
+                if dir.exists():
+                    shutil.rmtree(dir, ignore_errors=False)
+
+                if dir.exists():
+                    raise OSError(f"Failed to remove directory: {dir}")
             else:
                 raise FileExistsError(
                     f"Directory already exists: {dir}. Use overwrite=True or --tuning_engine.overwrite=True "
