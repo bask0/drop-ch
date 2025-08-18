@@ -18,6 +18,11 @@ pip-wheel-metadata/
 # === Jupyter Notebook checkpoints ===
 .ipynb_checkpoints/
 
+# === Sandbox (messy test stuff) ===
+**sandbox.ipynb
+**sandbox.py
+**sandbox/
+
 # === PyTorch Lightning ===
 logs/
 **/logs
