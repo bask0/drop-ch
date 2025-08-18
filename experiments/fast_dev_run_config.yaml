@@ -2,3 +2,6 @@ trainer:
   max_epochs: 1
   limit_train_batches: 1
   limit_val_batches: 1
+
+tuning_engine:
+  n_trials: 2
