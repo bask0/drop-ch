@@ -56,4 +56,5 @@ dependencies:
       - IProgress
       - rioxarray
       - xarray-spatial
+      - line_profiler
       - -e .[dev]
