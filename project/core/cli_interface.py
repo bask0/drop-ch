@@ -117,6 +117,7 @@ class CLI(LightningCLI):
             "early_stopping_callback.patience": 10,
             "early_stopping_callback.mode": 'min',
             "early_stopping_callback.min_delta": 0.0,
+            "early_stopping_callback.check_finite": True,
         })
         parser.add_lightning_class_args(ModelCheckpoint, "checkpoint_callback")
         parser.link_arguments(source="tuning_engine.monitor", target="checkpoint_callback.monitor")
