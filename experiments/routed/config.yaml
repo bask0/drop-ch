@@ -3,12 +3,12 @@ model:
   init_args:
     hidden_size: 32
     lstm_layers: 1
-    dropout: 0.0
+    variational_dropout: 0.0
     enc_dropout: 0.0
     learning_rate: 0.001
     weight_decay: 0.01
     max_q_chunk_size: 20
-    normalize_runoff: true
+    normalize_runoff: false
 
 data:
   class_path: project.data.datamodule.GraphDataModule
@@ -67,6 +67,7 @@ data:
     dyn_features:
       - prec
       - tair
+    norm_targets: False
     split_mode: random
     aggregate_catchments: true
     k_hops: 200
@@ -82,7 +83,7 @@ tuning_engine:
   exp_dir: experiments/lumped
   log_dir: /net/argon/landclim/kraftb/machflow_routing/logs/lumped
   monitor: valid_loss
-  n_trials: 4
+  n_trials: 40
   num_folds: 1
   overwrite: False
 
@@ -103,25 +104,25 @@ tuning_engine:
     model:
       learning_rate:
         method: float
-        low: 1e-5
+        low: 1e-3
         high: 1e-1
         log: True
 
       weight_decay:
         method: float
-        low: 1e-7
+        low: 1e-5
         high: 1e-1
         log: True
 
-      dropout:
+      variational_dropout:
         method: float
         low: 0.0
-        high: 0.4
+        high: 0.3
 
       enc_dropout:
         method: float
         low: 0.0
-        high: 0.4
+        high: 0.3
 
       lstm_layers:
         method: int
@@ -131,6 +132,6 @@ tuning_engine:
 
       hidden_size:
         method: int
-        low: 64
-        high: 256
-        step: 64
+        low: 128
+        high: 384
+        step: 128
