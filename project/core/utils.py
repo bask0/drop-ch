@@ -5,7 +5,9 @@ import os
 from typing import Any, Sequence, cast
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import BasePredictionWriter
+from lightning.pytorch.profilers import PyTorchProfiler
 import numpy as np
+from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 from torch.utils.data import DataLoader
 import xarray as xr
 from zarr.codecs import BloscCodec, BloscShuffle
@@ -28,18 +30,23 @@ def get_zarr_v3_encoding(ds: xr.Dataset) -> dict:
     encoding = {}
 
     for var in ds.data_vars:
+        chunks = {dim: 1000 if dim == 'time' else len(ds[dim]) for dim in ds[var].dims}
         encoding[var] = {
-            "compressors": BloscCodec(
-                cname="zstd",
+            'compressors': BloscCodec(
+                cname='zstd',
                 clevel=3,
                 shuffle=BloscShuffle.shuffle
             ),
+            'chunks': tuple(chunks.values())
         }
         ds[var].encoding.pop('compressors', None)
+        ds[var].encoding.pop('chunks', None)
+        if 'time' in ds[var].dims:
+            ds[var] = ds[var].chunk(chunks)
 
     for coord in ds.coords:
         encoding[coord] = {
-            "compressors": BloscCodec(
+            'compressors': BloscCodec(
                 cname="zstd",
                 clevel=1,
                 shuffle=BloscShuffle.shuffle
@@ -153,3 +160,20 @@ class PredictionWriter(BasePredictionWriter):
         ds.to_zarr(store=write_path, mode='w', encoding=encoding)
 
         logger.info(f"Predictions written to '{write_path}'.")
+
+
+def setup_profiler(trainer) -> None:
+    """Set up the PyTorch profiler for the trainer.
+
+    Args:
+        trainer (pl.Trainer): The PyTorch Lightning trainer instance.
+
+    """
+
+    dir_name = os.path.join(trainer.log_dir, 'profiler')  # type: ignore
+
+    trainer.profiler = PyTorchProfiler(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        record_shapes=True,
+        on_trace_ready=tensorboard_trace_handler(dir_name)
+    )
