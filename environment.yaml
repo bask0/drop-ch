@@ -46,6 +46,7 @@ dependencies:
   - pip:
       - dask-labextension
       - tensorboard
+      - tensorboard-plugin-profile
       - flake8
       - kaleido
       - jsonargparse[signatures]>=4.18.0
