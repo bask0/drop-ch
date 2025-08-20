@@ -25,6 +25,7 @@ import optuna
 from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 
 from project.core.cli_interface import CLI
+from project.core.utils import setup_profiler
 from project.utils.plotting import (
     plot_metric_cdf,
     plot_optuna_summary,
@@ -114,7 +115,8 @@ class TuningEngine:
             num_folds: int | None = None,
             monitor: str = 'val_loss',
             skip_tuning: bool = False,
-            overwrite: bool = False
+            overwrite: bool = False,
+            profile: bool = False,
     ) -> None:
         """
         Initialize the TuningEngine with the specified configuration.
@@ -130,6 +132,8 @@ class TuningEngine:
             monitor (str, optional): Metric to monitor for optimization. Defaults to 'val_loss'.
             skip_tuning (bool, optional): If True, skips the tuning process. Defaults to False.
             overwrite (bool, optional): If True, overwrites existing results and configurations. Defaults to False.
+            profile (bool, optional): If True, enables profiling of the training process. Can be inspected
+                with tensorboard. Defaults to False.
 
         Raises:
             ValueError: If num_folds is not specified.
@@ -148,6 +152,7 @@ class TuningEngine:
         self.monitor = monitor
         self.skip_tuning = skip_tuning
         self.overwrite = overwrite
+        self.profile = profile
 
         self.tune_dir = self.log_dir / "tune"
         self.xval_dir = self.log_dir / "xval"
@@ -421,6 +426,9 @@ class TuningEngine:
             args=args
         )
 
+        if self.profile:
+            setup_profiler(cli.trainer)
+
         if is_tune or (not is_tune and not use_best_tuning_checkpoint):
             # Fit the model
             cli.trainer.fit(model=cli.model, datamodule=cli.datamodule)
@@ -467,11 +475,10 @@ class TuningEngine:
         suggestion method ("loguniform", "uniform", "int", or "categorical") and appends it as a
         command-line argument string (e.g., '--param=value') to the result list. Implemented methods
         include:
-        - "loguniform": Samples a float in a logarithmic scale between low and high.
-        - "uniform": Samples a float in a linear scale between low and high.
-        - "int": Samples an integer between low and high.
         - "categorical": Samples a value from a list of choices, with an optional dtype
           for casting the value (e.g., int, float, str, bool).
+        - "int": Samples an integer between low and high, with optional `step` and `log` arguments.
+        - "float": Samples a float between low and high, with optional `step` and `log` arguments.
 
         Example search space::
 
@@ -510,12 +517,12 @@ class TuningEngine:
         for key, spec in self.search_space.items():
             suggestion_method = spec["method"]
 
-            if suggestion_method == 'suggest_categorical':
+            if suggestion_method == 'categorical':
                 if "dtype" not in spec:
                     raise ValueError(f"Missing 'dtype' for categorical search space: {key}")
                 cast_fn = TYPE_MAP[spec["dtype"]]
                 val = trial.suggest_categorical(key, [cast_fn(val) for val in spec["choices"]])
-            elif suggestion_method in 'suggest_float':
+            elif suggestion_method in 'float':
                 kwargs = {
                     "low": float(spec["low"]),
                     "high": float(spec["high"]),
@@ -523,7 +530,7 @@ class TuningEngine:
                     "step": spec.get("step", None),
                 }
                 val = trial.suggest_float(key, **kwargs)
-            elif suggestion_method in 'suggest_int':
+            elif suggestion_method in 'int':
                 kwargs = {
                     "low": spec["low"],
                     "high": spec["high"],
