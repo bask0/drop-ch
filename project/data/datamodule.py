@@ -11,11 +11,11 @@ from torch import Tensor
 from torch.utils.data import DataLoader, default_collate
 from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.loader import DataLoader as TGDataLoader
-from torch_geometric.utils import add_self_loops, degree, k_hop_subgraph
+from torch_geometric.utils import add_self_loops, k_hop_subgraph
 from torch_sparse import SparseTensor
 import xarray as xr
 
-from project.data.splitting import CatchmentSplitter
+from project.data.splitting import CatchmentSplitter, HRUSplitter
 from project.utils.torch.normalize import Normalize, RobustStandardize
 from project.utils.typing import HRUSample, assert_non_NaN
 
@@ -93,6 +93,7 @@ class HRUData(InMemoryDataset):
     def __init__(
             self,
             ds: xr.Dataset,
+            obs_mask: xr.DataArray | None,
             stat_features: list[str],
             stat_routing_features: list[str] | None = None,
             dyn_features: list[str] | None = None,
@@ -100,7 +101,6 @@ class HRUData(InMemoryDataset):
             temporal_context_length: int = 100,
             prediction_length: int = 20,
             hru_samples: list[int] | None = None,
-            hru_subset: list[int] | None = None,
             use_prevah: bool = False,
             aggregate_catchments: bool = False,
             transform: None | Callable = None):
@@ -109,6 +109,11 @@ class HRUData(InMemoryDataset):
 
         Args:
             ds (xr.Dataset): xarray dataset containing the data.
+            obs_mask (xr.DataArray | None): DataArray indicating which HRUs are treated as observations.
+                These HRUs are used in the loss function. If None, all HRUs with observations are used. Use this
+                argument to define HRUs which are used in the loss function but are not sampels, for example, for
+                validation and testing where we sometimes want to compute the domain in one forward step. If None,
+                all HRUs with observations are used.
             stat_features (list[str]): list of static features to include.
             stat_routing_features (list[str] | None): list of static routing features to include. IF None, the
                 stat_features are used.
@@ -118,10 +123,6 @@ class HRUData(InMemoryDataset):
             prediction_length (int): length of the prediction.
             hru_samples (list[int]): list of HRUs to consider. These are used to select HRUs with observations that
                 are treated as samples, i.e., they are iterated over.
-            hru_subset (list[int]): list of HRUs to consider as observation.
-                These HRUs are used in the loss function. If None, all HRUs with observations are used. Use this
-                argument to define HRUs which may not be sampels, for example, for validation and testing where we
-                sometimes want to compute the domain in one forward step.
             use_prevah (bool): whether to use the prevah discharge as target.
             aggregate_catchments (bool): whether to aggregate catchments.
             transform (None | Callable): transformation to apply to the data.
@@ -142,7 +143,6 @@ class HRUData(InMemoryDataset):
         self.k_hops = k_hops
         self.temporal_context_length = temporal_context_length
         self.prediction_length = prediction_length
-        self.hru_subset = hru_subset
         self.use_prevah = use_prevah
         self.aggregate_catchments = aggregate_catchments
 
@@ -152,10 +152,9 @@ class HRUData(InMemoryDataset):
                 'hru', np.arange(len(ds.hru))
             )
         )
-        ds.Q_obs_m3s.load()
-        ds.Q_obs_mmd.load()
 
         if self.use_prevah:
+            # ds.q_prevah_mmd.load()
             self.target = 'q_prevah_mmd'
             self.save_variables = [self.target]
         elif self.aggregate_catchments:
@@ -165,38 +164,27 @@ class HRUData(InMemoryDataset):
             self.target = 'Q_obs_m3s'
             self.save_variables = [self.target]
 
-        # Determine which HRUs have observations
-        if self.use_prevah:
-            has_obs = ds.q_prevah_mmd.notnull().any('time')
-        else:
-            has_obs = ds.Q_obs_m3s.notnull().any('time')
+        if obs_mask is None:
+            xr.ones_like(ds.hru, dtype=bool)
 
-        if self.hru_subset is not None:
-            use_obs = ds.hru.isin(self.hru_subset)
-            has_obs *= use_obs
-
-        ds['has_obs'] = has_obs
+        ds['has_obs'] = obs_mask
 
         # Set HRUs to use as samples (these are iterated)
         if hru_samples is None:
-            ds['is_sample'] = has_obs
+            ds['is_sample'] = obs_mask
         else:
             ds['is_sample'] = ds.hru.isin(hru_samples)
 
         ds = ds.reset_coords(['x', 'y'], drop=False)
 
-        # Build edge index for graph structure
-        self.edge_index = torch.tensor(
-            np.asarray([
-                [i, j.item()] for i, tgt in enumerate(ds.downstream.values) if
-                (tgt != -1) and len(j := np.argwhere(ds.hru.values == tgt)) > 0
-            ]).T
-        )
-
-        # Identify headwater HRUs (no upstream neighbors)
-        self.headwater_hru_idx = torch.argwhere(
-            degree(self.edge_index[1], num_nodes=len(ds.hru)) == 0
-        ).flatten()
+        # Build a mapping from HRU value to index for fast lookup
+        hru_value_to_index = {v: i for i, v in enumerate(ds.hru.values)}
+        edges = [
+            [i, hru_value_to_index[tgt]]
+            for i, tgt in enumerate(ds.downstream.values)
+            if tgt != -1 and tgt in hru_value_to_index
+        ]
+        self.edge_index = torch.tensor(np.asarray(edges).T)
 
         # List of HRUs to be used as samples
         self.sample_hrus = np.argwhere(ds.is_sample.values)[:, 0].tolist()
@@ -1243,6 +1231,9 @@ class GraphDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
+        # Derive observation HRU mask for all sets.
+        self.has_obs = ds.Q_obs_m3s.notnull().any('time').compute()
+
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
 
@@ -1304,41 +1295,37 @@ class GraphDataModule(pl.LightningDataModule):
         """
 
         if stage in ['init', 'train']:
-            hru_subset = self.train_hrus
+            has_obs = (self.has_obs * self.ds.hru.isin(self.train_hrus)).compute()
             hru_samples = None
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
-            temporal_subset = slice(None, None)
         elif stage == 'valid':
-            hru_subset = self.valid_hrus
+            has_obs = (self.has_obs * self.ds.hru.isin(self.valid_hrus)).compute()
             hru_samples = None if self.aggregate_catchments else self.valid_catchments
             temporal_context_length = -1
             prediction_length = -1
-            temporal_subset = slice('2004', '2008')
         elif stage == 'test':
-            hru_subset = self.test_hrus
+            has_obs = (self.has_obs * self.ds.hru.isin(self.test_hrus)).compute()
             hru_samples = None if self.aggregate_catchments else self.test_catchments
             temporal_context_length = -1
             prediction_length = -1
-            temporal_subset = slice('2000', '2008')
         elif stage == 'pred':
-            hru_subset = None
+            has_obs = self.has_obs
             hru_samples = None if self.aggregate_catchments else self.pred_catchments
             temporal_context_length = -1
             prediction_length = -1
-            temporal_subset = slice('2000', '2008')
         else:
             raise ValueError(f'Unknown stage: `{stage}`.')
 
         return HRUData(
-            ds=self.ds.sel(time=temporal_subset),
+            ds=self.ds,
+            obs_mask=has_obs,
             stat_features=self.stat_features,
             stat_routing_features=self.stat_routing_features,
             dyn_features=self.dyn_features,
             k_hops=self.k_hops,
             temporal_context_length=temporal_context_length,
             prediction_length=prediction_length,
-            hru_subset=hru_subset,  # type: ignore
             hru_samples=hru_samples,  # type: ignore
             aggregate_catchments=self.aggregate_catchments,
         )
@@ -1509,18 +1496,15 @@ class HRUDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_path: str,
-        train_hrus: np.ndarray | None,
-        valid_hrus: np.ndarray | None,
-        test_hrus: np.ndarray | None,
-        pred_hrus: np.ndarray | None,
         stat_features: list[str],
         dyn_features: list[str],
-        targets: list[str] | None,
         norm_targets: bool = True,
         temporal_context_length: int = 100,
         prediction_length: int = 20,
         batch_size: int = 32,
         num_workers: int = 4,
+        num_folds: int = 1,  # Keep for compatibility, not used in this class.
+        fold_idx: int = 0,  # Keep for compatibility, not used in this class.
     ) -> None:
         """
         Initialize the HRUDataModule.
@@ -1530,13 +1514,8 @@ class HRUDataModule(pl.LightningDataModule):
 
         Args:
             data_path (str): Path to the input dataset (Zarr format).
-            train_hrus (np.ndarray | None): HRU IDs to use for training. If None, all HRUs are included.
-            valid_hrus (np.ndarray | None): HRU IDs to use for validation.
-            test_hrus (np.ndarray | None): HRU IDs to use for testing.
-            pred_hrus (np.ndarray | None): HRU IDs to use for prediction/inference.
             stat_features (list[str]): List of static (non-temporal) feature names to include.
             dyn_features (list[str]): List of dynamic (temporal) feature names to include.
-            targets (list[str], optional): List of target variables to predict. Defaults to ['q_prevah_mmd'].
             norm_targets (bool, optional): Whether to normalize target variables. Defaults to True.
             temporal_context_length (int, optional): Number of past time steps to use as input. Defaults to 100.
             prediction_length (int, optional): Number of future time steps to predict. Defaults to 20.
@@ -1550,24 +1529,20 @@ class HRUDataModule(pl.LightningDataModule):
 
         super().__init__()
 
-        self.train_hrus = slice(None, None) if train_hrus is None else train_hrus
-        self.valid_hrus = slice(None, None) if valid_hrus is None else valid_hrus
-        self.test_hrus = slice(None, None) if test_hrus is None else test_hrus
-        self.pred_hrus = slice(None, None) if pred_hrus is None else pred_hrus
-
         self.ds = xr.open_zarr(data_path)
+
+        self.pred_hrus, self.train_hrus, self.valid_hrus, self.test_hrus = HRUSplitter(ds=self.ds).compute()
 
         self.stat_features = stat_features
         self.dyn_features = dyn_features
-        if targets is None:
-            self.targets = ['q_prevah_mmd']
-        else:
-            self.targets = targets
+        self.targets = ['q_prevah_mmd']
 
         self.temporal_context_length = temporal_context_length
         self.prediction_length = prediction_length
         self.batch_size = batch_size
         self.num_workers = num_workers
+
+        self.has_obs = self.ds.q_prevah_mmd.notnull().any('time').compute()
 
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
@@ -1601,31 +1576,37 @@ class HRUDataModule(pl.LightningDataModule):
         """
 
         if stage in ['init', 'train']:
-            hru_subset = self.train_hrus
+            ds = self.ds.sel(hru=self.train_hrus)
+            has_obs = self.has_obs.sel(hru=self.train_hrus)
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
         elif stage == 'valid':
-            hru_subset = self.valid_hrus
+            ds = self.ds.sel(hru=self.valid_hrus)
+            has_obs = self.has_obs.sel(hru=self.valid_hrus)
             temporal_context_length = -1
             prediction_length = -1
         elif stage == 'test':
-            hru_subset = self.test_hrus
+            ds = self.ds.sel(hru=self.test_hrus)
+            has_obs = self.has_obs.sel(hru=self.test_hrus)
             temporal_context_length = -1
             prediction_length = -1
         elif stage == 'pred':
-            hru_subset = self.pred_hrus
+            ds = self.ds.sel(hru=self.pred_hrus)
+            has_obs = self.has_obs.sel(hru=self.pred_hrus)
             temporal_context_length = -1
             prediction_length = -1
         else:
             raise ValueError(f'Unknown stage: `{stage}`.')
 
         return HRUData(
-            ds=self.ds.sel(hru=hru_subset).load(),
+            ds=ds,
+            obs_mask=has_obs,
             stat_features=self.stat_features,
             dyn_features=self.dyn_features,
             temporal_context_length=temporal_context_length,
             use_prevah=True,
-            prediction_length=prediction_length
+            prediction_length=prediction_length,
+            aggregate_catchments=False
         )
 
     def train_dataloader(self) -> DataLoader:
