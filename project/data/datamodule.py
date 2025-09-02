@@ -16,7 +16,7 @@ from torch_sparse import SparseTensor
 import xarray as xr
 
 from project.data.splitting import CatchmentSplitter, HRUSplitter
-from project.utils.torch.normalize import Normalize, RobustStandardize
+from project.utils.torch.normalize import LogXp, NoNormalizer, Normalizer
 from project.utils.typing import HRUSample, assert_non_NaN
 
 dask_config.set(scheduler='single-threaded')
@@ -249,7 +249,7 @@ class HRUData(InMemoryDataset):
         Returns:
             HRUSample: An object containing aggregated static features (`x`), dynamic features (`d`), observed
                 discharge (`y`),
-            HRU index, upstream area, lake indicator, water frequency, q95 value, and the serialized time slice.
+            HRU index, upstream area, lake indicator, water frequency, and the serialized time slice.
 
         Raises:
             AssertionError: If the area feature is not found in the dataset.
@@ -476,7 +476,6 @@ class HRUData(InMemoryDataset):
             time_slice=time_slice_serialized,
             k_edge_index=k_edge_index,
             k=k,
-            q95=self.q95,
         )
 
         return data
@@ -1107,6 +1106,7 @@ class GraphDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 4,
         ds_subset: dict | None = None,
+        load_ds_to_memory: bool = True,
         num_folds: int = 1,  # Keep for compatibility, not used in this class.
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
     ) -> None:
@@ -1131,6 +1131,7 @@ class GraphDataModule(pl.LightningDataModule):
             num_workers (int, optional): Number of worker processes for data loading. Default is 4.
             ds_subset (dict, optional)  Additional keyword arguments for xarray dataset subsettingusing `sel(...)`,
                 e.g., `{'time': slice(...)}`. Default is None, which means no subsetting is done.
+            load_ds_to_memory (bool, optional): If True, loads the entire dataset into memory. Default is True.
         """
 
         super().__init__()
@@ -1147,6 +1148,9 @@ class GraphDataModule(pl.LightningDataModule):
                 'hru', np.arange(len(ds.hru))
             )
         )
+
+        if load_ds_to_memory:
+            ds.load()  # TODO: Load only needed variables.
 
         edge_index = torch.tensor(
             np.asarray(
@@ -1237,28 +1241,27 @@ class GraphDataModule(pl.LightningDataModule):
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
 
-        self.norm_args_dyn_features = Normalize.make_kwargs(
+        self.norm_args_dyn_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.dyn_features
         )
 
-        self.norm_args_stat_features = Normalize.make_kwargs(
+        self.norm_args_stat_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.stat_features
         )
 
-        self.norm_args_stat_routing_features = Normalize.make_kwargs(
+        self.norm_args_stat_routing_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.stat_routing_features
         )
 
         if norm_targets:
-            if self.aggregate_catchments:
-                target = ['Q_obs_mmd']
+            if aggregate_catchments:
+                targets = ['Q_obs_mmd']
             else:
-                target = ['Q_obs_m3s']
-            self.norm_args_targets = RobustStandardize.make_kwargs(
-                ds=train_dataset.ds, norm_variables=target
-            )
+                targets = ['Q_obs_m3s']
+            self.norm_args_targets = LogXp.make_kwargs(
+                ds=train_dataset.ds, norm_variables=targets, target_centering=True, epsilon=1.0, clip_zero=True)
         else:
-            self.norm_args_targets = None
+            self.norm_args_targets = NoNormalizer.make_kwargs()
 
     def get_upstream_samples(self, hru_i: int, edge_index: Tensor) -> list[int]:
         """
@@ -1503,6 +1506,7 @@ class HRUDataModule(pl.LightningDataModule):
         prediction_length: int = 20,
         batch_size: int = 32,
         num_workers: int = 4,
+        load_ds_to_memory: bool = True,
         num_folds: int = 1,  # Keep for compatibility, not used in this class.
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
     ) -> None:
@@ -1521,6 +1525,7 @@ class HRUDataModule(pl.LightningDataModule):
             prediction_length (int, optional): Number of future time steps to predict. Defaults to 20.
             batch_size (int, optional): Batch size used in data loaders. Defaults to 32.
             num_workers (int, optional): Number of workers for data loading. Defaults to 4.
+            load_ds_to_memory (bool, optional): If True, loads the entire dataset into memory. Defaults to True.
 
         Notes:
             - HRU selection is done via slicing the dataset using xarray's `.sel()` based on the HRU IDs.
@@ -1530,6 +1535,9 @@ class HRUDataModule(pl.LightningDataModule):
         super().__init__()
 
         self.ds = xr.open_zarr(data_path)
+
+        if load_ds_to_memory:
+            self.ds.load()  # TODO: Load only needed variables.
 
         self.pred_hrus, self.train_hrus, self.valid_hrus, self.test_hrus = HRUSplitter(ds=self.ds).compute()
 
@@ -1547,20 +1555,26 @@ class HRUDataModule(pl.LightningDataModule):
         # Get train dataset.
         train_dataset = self.get_dataset(stage='init')
 
-        self.norm_args_dyn_features = Normalize.make_kwargs(
+        self.norm_args_dyn_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.dyn_features
         )
 
-        self.norm_args_stat_features = Normalize.make_kwargs(
+        self.norm_args_stat_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.stat_features
         )
 
         if norm_targets:
-            self.norm_args_targets = RobustStandardize.make_kwargs(
-                ds=train_dataset.ds, norm_variables=self.targets
+            self.norm_args_targets = Normalizer.make_kwargs(
+                ds=train_dataset.ds, norm_variables=self.targets, log_transform=True, epsilon=1.0
             )
         else:
-            self.norm_args_targets = None
+            self.norm_args_targets = NoNormalizer.make_kwargs()
+
+        if norm_targets:
+            self.norm_args_targets = LogXp.make_kwargs(
+                ds=train_dataset.ds, norm_variables=self.targets, target_centering=True, epsilon=1.0, clip_zero=True)
+        else:
+            self.norm_args_targets = NoNormalizer.make_kwargs()
 
     def get_dataset(self, stage: Literal['init', 'train', 'valid', 'test', 'pred']) -> HRUData:
         """
