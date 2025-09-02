@@ -114,7 +114,6 @@ class CatchmentSplitter:
             train = dict(
                 rhein_id=100201,
                 aare_brugg_id=181082,
-                birs_id=108030,
                 ticino_id=200148,
                 allaine_id=132754,
                 breggia_id=153964,
@@ -128,7 +127,10 @@ class CatchmentSplitter:
                 rheuss_id=157782,
                 rhone_id=121138,
             )
-            test = dict(limmat_id=186923)
+            test = dict(
+                limmat_id=186923,
+                birs_id=108030,
+            )
             return train, valid, test, False
 
         if self.mode == "hard":
