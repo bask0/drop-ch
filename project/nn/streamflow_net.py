@@ -1,0 +1,761 @@
+"""Defines the RunofNet, a lightning model with training routing for runoff prediction."""
+
+import os
+from pathlib import Path
+from typing import Literal, cast
+import lightning.pytorch as pl
+from lightning.pytorch.utilities import grad_norm
+import optuna
+import torch
+from torch import Tensor
+from torch.optim.adamw import AdamW
+from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.optimizer import Optimizer
+from torch_geometric.data import Batch
+from torch_sparse import SparseTensor
+
+from project.nn.models import EvaporationModel, RoutingModel, RunoffModel
+from project.nn.runoff_net import RunoffNet
+from project.utils.torch.loss import QLoss
+from project.utils.unit_conversion import convert_mmd_to_m3s
+
+
+class StreamflowNet(pl.LightningModule):
+    """StreamflowNet model.
+
+    StreamflowNet is a PyTorch Lightning module that integrates three neural network components for
+    hydrological modeling: RunoffModel, EvaporationModel, and RoutingModel. It enables joint training and
+    inference of runoff generation, evaporation, and streamflow routing over a graph of hydrological
+    response units (HRUs).
+
+    Note that argument `runoff_net_exp_dir` is required and should point to a RunoffNet experiment directory
+    with exactly one `**/tune/optuna.db` file present. From this file, the best model hyperparameters and
+    weights (if use_pretrained=True) or hyperparameters only (if use_pretrained=False) will be loaded.
+
+    Attributes:
+        runoff_net (RunoffNet): Runoff prediction network.
+        evaporation_net (EvaporationNet): Evaporation prediction network.
+        routing_net (RoutingNet): Routing network for streamflow.
+        path_sampler (PathSampler): Sampler for selecting paths in the graph for training.
+        criterion (QLoss): Loss function with water frequency and lake constraints.
+        prediction_length (int): Prediction horizon.
+        Various optimizer and scheduler hyperparameters.
+
+    Methods:
+        convert_m3s_to_mmd(x, area): Converts volumetric flow (m³/s) to depth per day (mm/d).
+        convert_mmd_to_m3s(x, area): Converts depth per day (mm/d) to volumetric flow (m³/s).
+        convert_q_to_m3s(x, batch, subset): Converts runoff predictions to m³/s using HRU area.
+        boundary_forward(batch, subset): Computes runoff, evaporation, and streamflow without gradients.
+        inference_forward(batch): Performs full forward pass for inference, returning diagnostics.
+        instant_forward(batch): Computes instantaneous runoff and streamflow.
+        coupled_forward(batch, subset): Computes streamflow with gradients for runoff and routing.
+        routing_forward(batch, subset): Computes streamflow with gradients for routing only.
+        training_step(batch, batch_idx): Training step with manual optimization and gradient clipping.
+        validation_step(batch, batch_idx): Validation step for model evaluation.
+        predict_step(batch, batch_idx, dataloader_idx): Prediction step for inference.
+        configure_optimizers(): Configures optimizers and learning rate schedulers.
+        log_loss(loss, batch, mode): Logs loss metrics for training, validation, or testing.
+        log_epoch_median_loss(mode): Logs median loss for the epoch.
+        on_train_epoch_end(): Callback for end of training epoch.
+        on_validation_epoch_end(): Callback for end of validation epoch.
+        on_test_epoch_end(): Callback for end of test epoch.
+
+    """
+
+    def __init__(
+            self,
+            num_stat_features: int | None = None,
+            num_stat_routing_features: int | None = None,
+            num_dynamic_features: int | None = None, 
+            runoff_net_exp_dir: str | Path | None = None,
+            runoff_use_pretrained: bool = True,
+            runoff_lr: float = 0.001,
+            runoff_weight_decay: float = 0.0,
+            runoff_max_lr_factor: float = 50.0,
+            runoff_pct_start: float = 0.03,
+            evaporation_enabled: bool = False,
+            evaporation_lr: float = 0.01,
+            routing_dynamic_modulation: bool = False,
+            routing_hidden_size: int = 16,
+            routing_time_substeps: int = 1,
+            routing_lr: float = 0.001,
+            routing_weight_decay: float = 0.0,
+            routing_pct_start: float = 0.03,
+            routing_max_lr_factor: float = 50.0,
+            lake_constraint_rate_constant: float = 0.3,
+            num_samples_per_graph: int = 20,
+            max_q_chunk_size: int = 200,
+            prediction_length: int | None = None,
+            norm_args_stat_routing_features: dict | None = None) -> None:
+        """Initialize the StreamflowNet with specified sub-networks, hyperparameters, and configuration options.
+
+        Args:
+            num_stat_features (int | None, optional): Number of static input features for the runoff network.
+                Default is None.
+            num_stat_routing_features (int | None, optional): Number of static input features for the routing network.
+                Default is None.
+            num_dynamic_features (int | None, optional): Number of dynamic input features for the runoff network.
+                Default is None.
+            runoff_net_exp_dir (str | Path): Path to RunoffNet experiment directory. Assumes only
+                one '**/tune/optuna.db' file present, otherwise will raise an error.
+            runoff_use_pretrained (bool, optional): If True, loads pretrained weights for RunoffNet, else only
+                hyperparameters from `runoff_net_exp_dir`.
+                Default is True.
+            runoff_lr (float, optional): Learning rate for the runoff network optimizer.
+                Default is 0.001.
+            runoff_weight_decay (float, optional): Weight decay for the runoff network optimizer.
+                Default is 0.0.
+            runoff_max_lr_factor (float, optional): Max learning rate factor for the runoff scheduler.
+                Default is 50.0.
+            runoff_pct_start (float, optional): % of steps for increasing learning rate in OneCycleLR
+                for runoff. Default is 0.03.
+            evaporation_enabled (bool, optional): If True, enables evaporation mnodule for lake surfaces.
+                Default is False.
+            evaporation_lr (float, optional): Learning rate for the evaporation network optimizer.
+                Default is 0.01.
+            routing_dynamic_modulation (bool, optional): If True, enables dynamic modulation in the routing network.
+                Default is False.
+            routing_hidden_size (int, optional): Hidden size for the routing network.
+                Default is 16.
+            routing_time_substeps (int, optional): Number of time substeps for the routing network.
+                Default is 1 (no substepping).
+            routing_lr (float, optional): Learning rate for the routing network optimizer.
+                Default is 0.001.
+            routing_weight_decay (float, optional): Weight decay for the routing network optimizer.
+                Default is 0.0.
+            routing_pct_start (float, optional): % of steps for increasing learning rate in OneCycleLR for routing.
+                Default is 0.03.
+            routing_max_lr_factor (float, optional): Max learning rate factor for the routing scheduler.
+                Default is 50.0.
+            lake_constraint_rate_constant (float, optional): Rate constant for lake constraint in loss function.
+                Default is 0.3.
+            num_samples_per_graph (int, optional): Number of paths sampled per graph for training.
+                Default is 20.
+            max_q_chunk_size (int, optional): Maximum subset length processed in one chunk to manage memory usage.
+                Default is 200
+            prediction_length (int, optional): Length of prediction horizon (required).
+            norm_args_stat_features:
+                Normalization arguments for static routingfeatures.
+                Default is None.
+
+        Raises:
+            ValueError: If `prediction_length` is not provided.
+        """
+
+        super().__init__()
+
+        self.save_hyperparameters()
+
+        self.automatic_optimization = False
+
+        if prediction_length is None:
+            raise ValueError('`prediction_length` must be provided.')
+
+        self.runoff_lr = runoff_lr
+        self.runoff_weight_decay = runoff_weight_decay
+        self.runoff_max_lr_factor = runoff_max_lr_factor
+        self.runoff_pct_start = runoff_pct_start
+        self.evaporation_lr = evaporation_lr
+        self.routing_lr = routing_lr
+        self.routing_weight_decay = routing_weight_decay
+        self.routing_pct_start = routing_pct_start
+        self.routing_max_lr_factor = routing_max_lr_factor
+
+        # -------- RunoffNet --------
+        #############################
+
+        if runoff_net_exp_dir is None:
+            raise ValueError('`runoff_net_exp_dir` must be provided.')
+
+        self.runoff_net = self._get_best_runoff_net(
+            experiment_dir=runoff_net_exp_dir,
+            use_pretrained=runoff_use_pretrained,
+            max_q_chunk_size=max_q_chunk_size)
+
+        # ----- EvaporationNet ------
+        #############################
+
+        self.evaporation_net = EvaporationModel(disable=not evaporation_enabled)
+
+        # ------- RoutingNet --------
+        #############################
+
+        if num_stat_routing_features is None:
+            raise ValueError('`num_stat_routing_features` must be provided.')
+
+        self.routing_net = RoutingModel(
+            num_inputs=num_stat_routing_features,
+            hidden_size=routing_hidden_size,
+            num_samples_per_graph=num_samples_per_graph,
+            dynamic_modulation=routing_dynamic_modulation,
+            num_time_subseteps=routing_time_substeps,
+            norm_args_stat_routing_features=norm_args_stat_routing_features,
+        )
+
+        # ------- Criterion --------
+        #############################
+
+        self.criterion = QLoss(
+            use_water_freq_constraint=True,
+            lake_constraint_rate_constant=lake_constraint_rate_constant
+        )
+
+    def convert_q_to_m3s(self, x: Tensor, batch: Batch, subset: Tensor | None = None) -> Tensor:
+        """Convert discharge values from millimeters per day (mm/d) to cubic meters per second (m³/s).
+
+        Args:
+            x (Tensor): Discharge values in mm/d to be converted.
+            batch (Batch): Batch object containing hydrological unit area information (`hru_area`).
+            subset (Tensor | None, optional): Optional tensor specifying a subset of HRUs to use for conversion.
+                If provided, only the specified subset of areas will be used.
+
+        Returns:
+            Tensor: Discharge values converted to m³/s.
+        """
+        area = cast(Tensor, batch.hru_area[:, None, None])  # type: ignore
+        if subset is not None:
+            area = area[subset]
+        return convert_mmd_to_m3s(x=x, area=area)
+
+    @torch.no_grad()
+    def boundary_forward(self, batch, subset) -> tuple[Tensor, Tensor, Tensor]:
+        """Perform a forward pass for boundary conditions in the routing network.
+
+        This method computes runoff and evaporation without gradients, then routes the resulting flows
+        using the routing network with boundary-specific settings.
+
+        Args:
+            batch: An object containing input data required for the computation, including temperature,
+                   hydrologic response unit (HRU) area, water frequency, and other relevant fields.
+            subset: An optional subset of indices or mask to specify which elements in the batch to process.
+
+        Returns:
+            tuple[Tensor, Tensor, Tensor]: A tuple containing:
+                - q: Runoff tensor (converted to m³/s).
+                - e: Evaporation tensor.
+                - Q: Routed flow tensor at the boundary.
+        """
+
+        # Compute runoff with no gradients.
+        q = self.runoff_net.chunked_forward(batch=batch, scale_output=True, subset=None)
+        q = self.convert_q_to_m3s(q, batch)
+        e = self.evaporation_net(T=batch.tair, area=batch.hru_area, water_freq=batch.water_freq, subset=None)
+        Q, *_ = self.routing_net.route(batch=batch, q=q.clone(), e=e.clone(), subset=subset, is_boundary=True)
+
+        return q, e, Q
+
+    @torch.no_grad()
+    def inference_forward(self, batch) -> \
+            tuple[Tensor, Tensor, Tensor, SparseTensor, SparseTensor, Tensor, Tensor, Tensor, Tensor]:
+        """Perform a forward inference pass through the runoff, evaporation, and routing networks.
+
+        Args:
+            batch: A batch object containing input features required for the networks, such as
+                - tair: Air temperature tensor.
+                - hru_area: Hydrologic response unit area tensor.
+                - water_freq: Water frequency tensor.
+
+        Returns:
+            tuple: A tuple containing the following outputs:
+                Q (Tensor): Routed streamflow output.
+                S (Tensor): Storage states.
+                R (Tensor): Runoff output.
+                T (SparseTensor): Transport diagnostics.
+                D (SparseTensor): Delay diagnostics.
+                k (Tensor): Routing coefficients.
+                q (Tensor): Raw runoff predictions (converted to m³/s).
+                e (Tensor): Evaporation estimates.
+                retention (Tensor): Retention diagnostics.
+        """
+
+        q = self.runoff_net.chunked_forward(
+            batch=batch,
+            scale_output=True,
+            subset=None)
+        q = self.convert_q_to_m3s(q, batch)
+        e = self.evaporation_net(
+            T=batch.tair,
+            area=batch.hru_area,
+            water_freq=batch.water_freq,
+            subset=None)
+        Q, S, R, T, D, k, retention = self.routing_net.route(
+            batch=batch, q=q, e=e,
+            subset=None,
+            return_diagnostics=True)
+
+        return Q, S, R, T, D, k, q, e, retention
+
+    @torch.no_grad()
+    def instant_forward(self, batch) -> tuple[Tensor, Tensor]:
+        """Perform a forward pass through the network for the given batch with instantaneous transport.
+
+        Args:
+            batch: Input data batch containing features required by the runoff and routing networks.
+
+        Returns:
+            tuple[Tensor, Tensor]:
+                - q: The runoff output tensor (scaled and converted to m³/s).
+                - Q: The routed discharge tensor after applying the routing network.
+        """
+
+        q = self.runoff_net.chunked_forward(
+            batch=batch,
+            scale_output=True,
+            subset=None)
+        q = self.convert_q_to_m3s(
+            x=q,
+            batch=batch,
+            subset=None)
+        Q = self.routing_net.instant_route(
+            batch=batch,
+            q=q)
+
+        return q, Q
+
+    def coupled_forward(self, batch, subset) -> tuple[Tensor, Tensor]:
+        """Perform a forward pass through the network for the given batch.
+
+        Args:
+            batch: An object containing input data required for the forward pass,
+                including meteorological and hydrological variables.
+            subset: Indices or identifiers specifying the subset of nodes for which
+                gradients are computed.
+
+        Returns:
+            tuple[Tensor, Tensor]:
+                - Q: Tensor of shape (N, T, 1), representing the total streamflow at all nodes,
+                     combining boundary conditions and contributions from the subset.
+                - retention: Tensor containing retention values computed during routing.
+        """
+        # Compute streamflow for a given subset of S nodes, keep gradients for runoff and routing.
+
+        # Q_boundary is streamflow, excluding transport from subset nodes, it has shape N x T x 1.
+        _, _, Q_boundary = self.boundary_forward(batch=batch, subset=subset)
+
+        # q_grads is the runoff for the subset for which we compute gradients, it has shape S x T x 1.
+        # Q_grads is the streamflow transported from the subset to all nodes, it has shape N x T x 1.
+        q_grads = self.runoff_net(
+            batch=batch,
+            scale_output=True,
+            subset=subset)
+        q_grads = self.convert_q_to_m3s(
+            x=q_grads,
+            batch=batch,
+            subset=subset)
+        e_grads = self.evaporation_net(
+            T=batch.tair,
+            area=batch.hru_area,
+            water_freq=batch.water_freq,
+            subset=subset)
+        Q_grads, *_, retention = self.routing_net.route(
+            batch=batch,
+            q=q_grads,
+            e=e_grads,
+            subset=subset)
+
+        # The combined streamflow, boundary conditions plus subset nodes.
+        Q = Q_boundary + Q_grads
+
+        return Q, retention
+
+    def routing_forward(self, batch, subset) -> tuple[Tensor, Tensor]:
+        """Compute the streamflow for a specified subset of nodes, incorporating boundary conditions and transport.
+
+        Args:
+            batch: Input batch containing data required for streamflow computation.
+            subset: Indices or mask specifying the subset of nodes for which routing is performed.
+
+        Returns:
+            tuple[Tensor, Tensor]:
+                - Q: Tensor representing the combined streamflow for all nodes, with contributions from
+                    both boundary conditions and routed subset nodes.
+                - retention: Tensor representing the retention values computed during routing for
+                    the subset nodes.
+        """
+        # Compute streamflow for a given subset of S nodes, keep gradients for routing, runoff is boundary condition.
+
+        # q_boundary is runoff for all nodes, it has shape N x T x 1.
+        # Q_boundary is streamflow, excluding transport from subset nodes, it has shape N x T x 1.
+        q_boundary, e_boundary, Q_boundary = self.boundary_forward(batch=batch, subset=subset)
+
+        # Q_grads is the streamflow transported from the subset to all nodes, it has shape N x T x 1.
+        Q_grads, *_, retention = self.routing_net.route(
+            batch=batch,
+            q=q_boundary[subset],
+            e=e_boundary[subset],
+            subset=subset)
+
+        # The combined streamflow, boundary conditions plus subset nodes.
+        Q = Q_boundary + Q_grads
+
+        return Q, retention
+
+    def training_step(self, batch, batch_idx) -> Tensor:
+        """Perform a single training step for the model.
+
+        Args:
+            batch: The input batch of data for training.
+            batch_idx: The index of the current batch.
+
+        Returns:
+            Tensor: The computed loss for the current training step.
+
+        Workflow:
+            - Samples a subset of paths from the batch using the path sampler.
+            - Computes model outputs (Q, retention) via coupled_forward.
+            - Calculates the loss and log loss using the criterion.
+            - Retrieves optimizers and learning rate schedulers.
+            - Performs manual backward pass and gradient clipping.
+            - Logs gradient norms.
+            - Steps the optimizers and schedulers.
+            - Zeros optimizer gradients.
+            - Logs the loss for monitoring.
+        """
+        subset = self.routing_net.path_sampler.sample_paths(batch=batch)
+
+        Q, retention = self.coupled_forward(batch=batch, subset=subset)
+
+        loss, log_loss = self.criterion(
+            y_hat=Q,
+            # y_instant=Q_instant,
+            batch=batch,
+            subset=subset,
+            mode='train',
+            step=self.current_epoch,
+            x_retention=retention,
+            prediction_length=self.routing_net.prediction_length
+        )
+
+        runoff_optimizer, evaporation_optimizer, routing_optimizer = cast(
+            tuple[Optimizer, Optimizer, Optimizer], self.optimizers())
+        runoff_scheduler, routing_scheduler = cast(
+            tuple[torch.optim.lr_scheduler.LRScheduler, torch.optim.lr_scheduler.LRScheduler], self.lr_schedulers())
+
+        self.manual_backward(loss)
+
+        torch.nn.utils.clip_grad_norm_(self.runoff_net.parameters(), max_norm=5.0)
+        torch.nn.utils.clip_grad_norm_(self.routing_net.parameters(), max_norm=5.0)
+
+        self.log_dict(grad_norm(self, norm_type=2))
+
+        runoff_optimizer.step()
+        evaporation_optimizer.step()
+        routing_optimizer.step()
+
+        runoff_scheduler.step()
+        routing_scheduler.step()
+
+        runoff_optimizer.zero_grad()
+        evaporation_optimizer.zero_grad()
+        routing_optimizer.zero_grad()
+
+        self.log_loss(loss=log_loss, mode='train', batch=batch)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx) -> Tensor:
+        """Perform a single validation step during model evaluation.
+
+        Args:
+            batch: The input batch of data for validation.
+            batch_idx: The index of the current batch.
+
+        Returns:
+            Tensor: The computed validation loss for the batch.
+
+        This method runs inference on the input batch, computes the validation loss using the model's criterion,
+        logs the loss for monitoring, and returns the loss value.
+        """
+
+        Q, *_, retention = self.inference_forward(batch=batch)
+
+        loss, log_loss = self.criterion(
+            y_hat=Q,
+            # y_instant=Q_instant,
+            batch=batch,
+            mode='valid',
+            step=self.current_epoch,
+            x_retention=retention,
+            prediction_length=Q.shape[1] - 365,
+        )
+
+        self.log_loss(loss=log_loss, mode='valid', batch=batch)
+
+        return loss
+
+    def predict_step(
+            self,
+            batch: Batch,
+            batch_idx: int,
+            dataloader_idx: int = 0) -> dict:
+        """Perform a prediction step for the given batch during model inference.
+
+        Args:
+            batch (Batch): The input batch containing data for inference.
+            batch_idx (int): Index of the current batch.
+            dataloader_idx (int, optional): Index of the dataloader. Defaults to 0.
+
+        Returns:
+            dict: A dictionary containing the following keys:
+                - 'Q': Predicted discharge values.
+                - 'S': Predicted storage values.
+                - 'R': Predicted runoff values.
+                - 'Q_instant': Instantaneous discharge predictions.
+                - 'q': Additional output from inference.
+                - 'e': Additional output from inference.
+                - 'batch': The input batch.
+                - 'T': Original sparse tensor T.
+                - 'T_down': Downstream sparse tensor derived from T.
+                - 'D': Original sparse tensor D.
+                - 'D_down': Downstream sparse tensor derived from D.
+            All tensor values are moved to CPU.
+        """
+
+        Q, S, R, T, D, k, q, e, retention = self.inference_forward(batch=batch)
+        _, Q_instant = self.instant_forward(batch=batch)
+
+        # Handle R (batch x time substeps)
+
+        row, col, val = T.coo()
+        T_down = SparseTensor(row=col, col=k, value=val)
+        row, col, val = D.coo()
+        D_down = SparseTensor(row=col, col=k, value=val)
+
+        return_dict = {
+            'Q': Q,
+            'S': S,
+            'R': R,
+            'Q_instant': Q_instant,
+            'q': q,
+            'e': e,
+            'batch': batch,
+            'T': T,
+            'T_down': T_down,
+            'D': D,
+            'D_down': D_down,
+        }
+
+        return {k: v.to('cpu') for k, v in return_dict.items()}
+
+    def configure_optimizers(self) -> tuple[dict, dict, dict]:
+        """Configure and returns optimizers and learning rate schedulers for the model's sub-networks.
+
+        Returns:
+            tuple[dict, dict, dict]:
+                - The first dictionary contains the optimizer and scheduler for the runoff network,
+                    including interval, frequency, and name for the scheduler.
+                - The second dictionary contains the optimizer for the evaporation network.
+                - The third dictionary contains the optimizer and scheduler for the routing network,
+                    including interval, frequency, and name for the scheduler.
+
+        Notes:
+            - Uses AdamW optimizers for all sub-networks.
+            - Uses OneCycleLR schedulers for the runoff and routing networks.
+            - Scheduler parameters are configured using class attributes.
+        """
+
+        stepping_batches = int(self.trainer.estimated_stepping_batches)
+
+        runoff_optimizer = AdamW(
+            params=self.runoff_net.parameters(),
+            lr=self.runoff_lr,
+            weight_decay=self.runoff_weight_decay
+        )
+
+        evaporation_optimizer = AdamW(
+            params=self.evaporation_net.parameters(),
+            lr=self.evaporation_lr,
+            weight_decay=0.0
+        )
+
+        routing_optimizer = AdamW(
+            params=self.routing_net.parameters(),
+            lr=self.routing_lr,
+            weight_decay=self.routing_weight_decay
+        )
+
+        runoff_scheduler = OneCycleLR(
+            optimizer=runoff_optimizer,
+            max_lr=self.runoff_lr * self.runoff_max_lr_factor,
+            total_steps=stepping_batches,
+            pct_start=self.runoff_pct_start
+        )
+
+        routing_scheduler = OneCycleLR(
+            optimizer=routing_optimizer,
+            max_lr=self.routing_lr * self.routing_max_lr_factor,
+            total_steps=stepping_batches,
+            pct_start=self.routing_pct_start
+        )
+
+        return (
+            {
+                'optimizer': runoff_optimizer,
+                'lr_scheduler': runoff_scheduler,
+                'interval': 'step',
+                'frequency': 1,
+                'name': 'runoff_lr',
+            },
+            {
+                'optimizer': evaporation_optimizer,
+            },
+            {
+                'optimizer': routing_optimizer,
+                'lr_scheduler': routing_scheduler,
+                'interval': 'step',
+                'frequency': 1,
+                'name': 'routing_lr',
+            }
+        )
+
+    def log_loss(self, loss: dict[str, Tensor], batch: Batch, mode: Literal['train', 'valid', 'test']) -> None:
+        """Log loss values for a given batch and mode.
+
+        Args:
+            loss (dict[str, Tensor]): Dictionary containing loss components as tensors.
+            batch (Batch): The batch object containing data and batch size information.
+            mode (Literal['train', 'valid', 'test']): The mode indicating the phase ('train', 'valid', or 'test').
+
+        Raises:
+            ValueError: If `mode` is not one of 'train', 'valid', or 'test'.
+
+        Notes:
+            - Loss values are logged with keys prefixed by the mode (e.g., 'train_loss').
+            - Progress bar logging is enabled only during training.
+            - Batch size is determined differently for training and evaluation modes.
+        """
+
+        if mode not in ('train', 'valid', 'test'):
+            raise ValueError('\'mode\' must be one of \'train\', \'valid\', or \'test\'.')
+
+        self.log_dict(
+            {f'{mode}_{k}': v for k, v in loss.items()},
+            prog_bar=False,
+            on_step=True if mode == 'train' else False,
+            on_epoch=True,
+            batch_size=batch.batch_size if mode == 'train' else batch.has_obs.sum().item()  # type: ignore
+        )
+
+    def log_epoch_median_loss(self, mode: Literal['train', 'valid', 'test']) -> None:
+        """Log the median loss for the specified mode ('train', 'valid', or 'test') at the end of an epoch.
+
+        This method retrieves the loss values stored in the criterion's loss state for the given mode,
+        computes their median, and logs it with a key formatted as '{mode}_epoch_median'. After logging,
+        it resets the loss state for the specified mode.
+
+        Args:
+            mode (Literal['train', 'valid', 'test']): The mode for which to log the epoch median loss.
+        """
+
+        loss_state = self.criterion.loss_state.copy()
+        for key, values in loss_state.items():
+            if key.startswith(mode):
+                self.log(key + '_epoch_median', torch.cat(values).median())
+                self.criterion.reset_loss_state(mode)
+
+    def on_train_epoch_end(self) -> None:
+        """Call at the end of the training epoch.
+
+        This method overrides the parent class's `on_test_epoch_end` to perform additional logging.
+        It first calls the superclass implementation, then logs the median loss for the test epoch
+        using the `log_epoch_median_loss` method.
+
+        Returns:
+            None
+        """
+        super().on_train_epoch_end()
+        self.log_epoch_median_loss('train')
+
+    def on_validation_epoch_end(self) -> None:
+        """Call at the end of the validation epoch.
+
+        This method overrides the parent class's `on_test_epoch_end` to perform additional logging.
+        It first calls the superclass implementation, then logs the median loss for the test epoch
+        using the `log_epoch_median_loss` method.
+
+        Returns:
+            None
+        """
+        super().on_validation_epoch_end()
+        self.log_epoch_median_loss('valid')
+
+    def on_test_epoch_end(self) -> None:
+        """Call at the end of the test epoch.
+
+        This method overrides the parent class's `on_test_epoch_end` to perform additional logging.
+        It first calls the superclass implementation, then logs the median loss for the test epoch
+        using the `log_epoch_median_loss` method.
+
+        Returns:
+            None
+        """
+
+        super().on_test_epoch_end()
+        self.log_epoch_median_loss('test')
+
+    def _find_best_runoff_net_ckpt(self, experiment_dir: str | Path) -> Path:
+        """Find the best RunoffNet model checkpoint from the specified experiment directory.
+
+        Args:
+            experiment_dir (str | Path): Path to the RunoffNet experiment directory containing
+                the 'tune/optuna.db' file.
+
+        Returns:
+            Path: Path to the best RunoffNet model checkpoint.
+
+        Raises:
+            FileNotFoundError: If no 'tune/optuna.db' file is found in the specified directory.
+            ValueError: If multiple 'tune/optuna.db' files are found in the specified directory.
+
+        """
+
+        hits = []
+        for root, _, files in os.walk(experiment_dir, followlinks=True):
+            if 'optuna.db' in files:
+                path = Path(root) / 'optuna.db'
+                if path.parent.name == "tune":   # only keep those in tune/
+                    hits.append(path)
+
+        if len(hits) == 0:
+            raise FileNotFoundError(f'No \'**/tune/optuna.db\' files found in {experiment_dir}.')
+        elif len(hits) > 1:
+            raise ValueError(f'Multiple \'**/tune/optuna.db\' files found in {experiment_dir}, please specify '
+                             f'a directory with only one such file. Hits were:')
+
+        study = optuna.load_study(study_name='experiment', storage=f'sqlite:///{hits[0]}')
+        best_checkpoint = study.best_trial.user_attrs['best_checkpoint']
+
+        return Path(best_checkpoint)
+
+    def _get_best_runoff_net(
+            self, experiment_dir: str | Path,
+            use_pretrained: bool,
+            **overwrite_kwargs) -> RunoffModel:
+        """Get the best RunoffNet model checkpoint from the specified experiment directory.
+
+        Args:
+            experiment_dir (str | Path): Path to the RunoffNet experiment directory containing
+                the 'tune/optuna.db' file.
+            use_pretrained (bool): If True, loads pretrained weights, else only hyperparameters.
+            **overwrite_kwargs: Additional keyword arguments to overwrite default parameters.
+
+        Returns:
+            RunoffModel: The loaded RunoffNet model instance.
+
+        """
+
+        best_runoff_net_ckpt = self._find_best_runoff_net_ckpt(experiment_dir=experiment_dir)
+
+        if use_pretrained:
+            runoff_net = RunoffNet.load_from_checkpoint(
+                best_runoff_net_ckpt,
+                map_location='cpu',
+                **overwrite_kwargs).runoff_lstm
+        else:
+            hps = torch.load(
+                best_runoff_net_ckpt,
+                map_location='cpu')['hyper_parameters']
+            hps.update(overwrite_kwargs)
+            runoff_net = RunoffNet(**hps).runoff_lstm
+
+        return runoff_net
