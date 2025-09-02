@@ -3,8 +3,6 @@
 import torch
 from torch import Tensor
 
-from project.utils.torch.get_activations import ActivationLiteral, get_activation
-
 
 class EncodingModule(torch.nn.Module):
     """Implements an encoding module based on Conv1D layers.
@@ -42,7 +40,7 @@ class EncodingModule(torch.nn.Module):
             activation (torch.nn.Module, optional): The activation of hidden layers.
                 Defaults to None -> torch.nn.Sigmoid().
             activation_last (torch.nn.Module, optional): the activation of the output layer.
-                Defaults to None -> torch.nn.Sigmoid().
+                Defaults to None -> torch.nn.Identity().
         """
 
         super().__init__()
@@ -52,7 +50,7 @@ class EncodingModule(torch.nn.Module):
         if activation is None:
             activation = torch.nn.Sigmoid()
         if activation_last is None:
-            activation_last = torch.nn.Sigmoid()
+            activation_last = torch.nn.Identity()
 
         layers: list[torch.nn.Module] = []
 
@@ -86,6 +84,65 @@ class EncodingModule(torch.nn.Module):
         return self.encoding(x)
 
 
+class VariationalDropout(torch.nn.Module):
+    """Apply the same dropout mask across the temporal dimension.
+
+    See https://arxiv.org/abs/1512.05287 for more details.
+
+    CODE SOURCE: https://github.com/keitakurita/Better_LSTM_PyTorch/blob/master/better_lstm/model.py
+    AUTHOR: Keita Kurita
+    ORIGINAL LICENSE: MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+
+    """
+
+    def __init__(self, dropout: float, batch_first: bool = False) -> None:
+        """Initialize VariationalDropout.
+
+        Args:
+            dropout (float): Dropout rate to apply.
+            batch_first (bool): If True, input tensors are expected to have shape (B, T, C) where
+                B is the batch size, T is the sequence length, and C is the number of features.
+                If False, input tensors are expected to have shape (T, B, C).
+        """
+
+        super().__init__()
+        self.dropout = dropout
+        self.batch_first = batch_first
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Model forward pass.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, T, C) or (T, B, C) if `batch_first=False`.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape as input, with dropout applied.
+        """
+
+        if not self.training or self.dropout <= 0.:
+            return x
+
+        # Drop same mask across entire sequence
+        if self.batch_first:
+            m = x.new_empty(x.size(0), 1, x.size(2), requires_grad=False).bernoulli_(1 - self.dropout)
+        else:
+            m = x.new_empty(1, x.size(1), x.size(2), requires_grad=False).bernoulli_(1 - self.dropout)
+
+        x = x * m / (1 - self.dropout)
+
+        return x
+
+
 class LSTM(torch.nn.Module):
     """
     LSTM module with static and dynamic input encodings.
@@ -108,8 +165,7 @@ class LSTM(torch.nn.Module):
             lstm_layers: int = 1,
             output_size: int = 1,
             enc_dropout: float = 0.0,
-            dropout: float = 0.0,
-            output_activation: ActivationLiteral = 'softplus',
+            variational_dropout: float = 0.0,
             **kwargs) -> None:
         """
         Initialize the LSTM model.
@@ -121,9 +177,7 @@ class LSTM(torch.nn.Module):
             lstm_layers (int): Number of stacked LSTM layers.
             output_size (int): Output feature size per timestep.
             enc_dropout (float): Dropout rate used in both encoding modules.
-            dropout (float): Dropout rate used after the LSTM.
-            output_activation (str): Name of activation function used after the output layer.
-            **kwargs: Additional keyword arguments passed to the parent `nn.Module`.
+            variational_dropout (float): Dropout rate used on dynamic encodings (variational).
         """
 
         super().__init__(**kwargs)
@@ -135,9 +189,13 @@ class LSTM(torch.nn.Module):
             num_in=num_static_in,
             num_enc=hidden_size,
             num_layers=2,
-            dropout=enc_dropout,
+            dropout=0,  # Done separately.
             activation=torch.nn.ReLU(),
-            activation_last=torch.nn.Tanh()
+            activation_last=torch.nn.Sigmoid()
+        )
+
+        self.static_dropout = torch.nn.Dropout(
+            p=enc_dropout
         )
 
         # Dynamic input encoding: encodes dynamic inputs for each timestep
@@ -145,9 +203,14 @@ class LSTM(torch.nn.Module):
             num_in=num_dynamic_in,
             num_enc=hidden_size,
             num_layers=2,
-            dropout=enc_dropout,
-            activation=torch.nn.Tanh(),
-            activation_last=torch.nn.Sigmoid()
+            dropout=0,  # Done separately.
+            activation=torch.nn.ReLU(),
+            activation_last=torch.nn.Tanh()
+        )
+
+        self.variational_dropout = VariationalDropout(
+            dropout=variational_dropout,
+            batch_first=True
         )
 
         # Temporal modeling with LSTM
@@ -158,9 +221,6 @@ class LSTM(torch.nn.Module):
             batch_first=True,
         )
 
-        # Dropout applied after LSTM
-        self.dropout = torch.nn.Dropout(p=dropout)
-
         # Output projection layer
         self.out_layer = torch.nn.Linear(
             in_features=hidden_size,
@@ -168,7 +228,7 @@ class LSTM(torch.nn.Module):
         )
 
         # Optional activation function applied to outputs
-        self.output_activation = get_activation(output_activation)
+        self.output_activation = torch.nn.Identity()
 
     def forward(self, x: Tensor, s: Tensor) -> Tensor:
         """
@@ -186,20 +246,22 @@ class LSTM(torch.nn.Module):
         """
 
         # Encode dynamic inputs: (B, S, D) -> (B, S, E)
-        enc = self.dynamic_encoding(x)
+        d_enc = self.dynamic_encoding(x)
+        d_enc = self.variational_dropout(d_enc)
 
         if s is not None:
             # Encode static inputs and broadcast: (B, C) -> (B, 1, E)
             s_enc = self.static_encoding(s).unsqueeze(1)
+            s_enc = self.static_dropout(s_enc)
 
-            # Combine static and dynamic encodings
-            enc = enc + s_enc  # Broadcasting over time dimension
+            # Combine static and dynamic encodings with broadcasting
+            enc = d_enc + s_enc
 
         # Pass through LSTM: (B, S, E) -> (B, S, E)
         out, _ = self.lstm(enc)
 
         # Apply dropout and output projection: (B, S, E) -> (B, S, O)
-        out = self.out_layer(self.dropout(out))
+        out = self.out_layer(out)
 
         # Apply final activation
         return self.output_activation(out)
