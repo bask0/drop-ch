@@ -1,9 +1,12 @@
 """Loss functions for PyTorch models."""
 
 import logging
+from typing import Literal
 import torch
 from torch import Tensor, nn
 from torch.linalg import vector_norm
+
+from project.utils.unit_conversion import convert_m3s_to_mmd
 
 logger = logging.getLogger('pytorch_lightning')
 
@@ -120,7 +123,7 @@ class SkillScore(torch.nn.Module):
 
         self.focal_loss_alpha = focal_loss_alpha
 
-    def forward(self, input: Tensor, target: Tensor, reference: Tensor) -> Tensor:     
+    def forward(self, input: Tensor, target: Tensor, reference: Tensor) -> Tensor:
         """
         Compute a normalized mean squared error loss between `input` and `target`.
 
@@ -133,8 +136,8 @@ class SkillScore(torch.nn.Module):
             reference (Tensor): Reference tensor for normalization.
 
         Returns:
-            Tensor: The computed loss. If `self.reduction` is 'none', returns the loss 
-            per sample; otherwise, returns the mean loss.
+            Tensor: The computed loss. If `self.reduction` is 'none', returns the loss
+                per sample; otherwise, returns the mean loss.
 
         Raises:
             ValueError: If `input` and `target` shapes do not match.
@@ -420,8 +423,11 @@ class EnergyLoss(nn.Module):
 
         # (batch, L)
         s1 = (
-            0.5 * self.mean_masked((vector_norm(diff0, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1) +
-            0.5 * self.mean_masked((vector_norm(diff1, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1)
+            0.5 * self.mean_masked(
+                (vector_norm(diff0, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1
+            ) + 0.5 * self.mean_masked(
+                (vector_norm(diff1, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1
+            )
         )
 
         # (batch, L)
@@ -506,3 +512,203 @@ class EnergyLoss(nn.Module):
         es_length = self.es_length
         s = f'EnergyLoss({beta=}, {es_length=})'
         return s
+
+
+class QLoss(torch.nn.Module):
+    """Streamflow (Q) loss module for hydrological modeling.
+
+    This loss function combines a regression loss (e.g., L2, NSE, etc.) for streamflow prediction
+    with an optional water frequency constraint for lake HRUs (Hydrologic Response Units).
+    The water frequency constraint penalizes unrealistic retention values in lakes, helping to
+    regularize predictions in these regions.
+
+    """
+
+    def __init__(
+            self,
+            use_water_freq_constraint: bool = False,
+            lake_constraint_rate_constant: float = 0.3) -> None:
+        """Initialize the loss module with optional water frequency and lake constraints.
+
+        Args:
+            use_water_freq_constraint (bool, optional): If True, applies a water frequency constraint to the
+                loss calculation. Defaults to False.
+            lake_constraint_rate_constant (float, optional): Rate constant for the lake constraint
+                regularization term. Defaults to 0.3.
+
+        """
+
+        super().__init__()
+
+        self.use_water_freq_constraint = use_water_freq_constraint
+        self.lake_constraint_rate_constant = lake_constraint_rate_constant
+        self.loss_fun = RegressionLoss(criterion='L2', log_transform=False, reduction='none')
+
+        self.loss_state = {}
+
+    def forward(
+            self,
+            y_hat,
+            batch,
+            mode: Literal['train', 'valid', 'test'],
+            step: int,
+            subset: Tensor | None = None,
+            y_instant: Tensor | None = None,
+            x_retention: Tensor | None = None,
+            prediction_length: int = 0) -> tuple[Tensor, dict[str, Tensor]]:
+        """Compute the loss and associated metrics for a batch of predictions.
+
+        Args:
+            y_hat (Tensor): Model predictions of streamflow in m³ for all HRUs.
+            batch: Batch object containing ground truth and metadata for HRUs.
+            mode (Literal['train', 'valid', 'test']): Mode indicating training, validation, or testing.
+            step (int): Current training/validation/test step.
+            subset (Tensor, optional): Indices of HRUs to evaluate (used in training).
+            y_instant (Tensor, optional): Instantaneous reference streamflow values (required for 'ss' criterion).
+            x_retention (Tensor, optional): Retention values for water frequency constraint.
+            prediction_length (int, optional): Number of timesteps to evaluate.
+
+        Returns:
+            tuple:
+                - loss (Tensor): Total computed loss for the batch.
+                - log_loss (dict[str, Tensor]): Dictionary containing loss components:
+                    - 'loss': Total loss.
+                    - 'reg_loss': Regression loss.
+                    - 'water_freq_loss': Water frequency constraint loss.
+                    - 'water_freq_loss_weight': Weight applied to water frequency loss.
+
+        Raises:
+            ValueError: If mode is not one of 'train', 'valid', or 'test'.
+            ValueError: If water frequency constraint is enabled but `x_retention` is not provided.
+            NotImplementedError: If the specified loss criterion is not supported.
+        """
+
+        # Select subset of HRUs on which we evaluate loss function.
+        if mode == 'train':
+            # For training, these are sampled HRUs.
+            eval_subset = self.get_sample_indices(batch)
+        elif mode in ('valid', 'test'):
+            # For validation, these are all HRUs with observations, including such upstream to the sampled one.
+            eval_subset = batch.has_obs
+        else:
+            raise ValueError('\'mode\' must be one of \'train\', \'valid\', or \'test\'.')
+
+        if self.use_water_freq_constraint and (x_retention is None):
+            raise ValueError('with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.')
+
+        upstream_area = batch.upstream_area[eval_subset].unsqueeze(-1)
+
+        y_hat = convert_m3s_to_mmd(y_hat[eval_subset, -prediction_length:, 0], upstream_area)
+        y = convert_m3s_to_mmd(batch.y[eval_subset, -prediction_length:, 0], upstream_area)
+
+        if self.loss_fun.criterion == 'nse':
+            q_std = batch.q_std[eval_subset].unsqueeze(-1)
+            q_std = convert_m3s_to_mmd(q_std, upstream_area)
+            reg_loss_batch = self.loss_fun(
+                input=y_hat,
+                target=y,
+                basin_std=q_std
+            )
+        elif self.loss_fun.criterion in ['l1', 'l2', 'huber']:
+            reg_loss_batch = self.loss_fun(
+                input=y_hat,
+                target=y
+            )
+        elif self.loss_fun.criterion == 'ss':
+            assert y_instant is not None
+            y_instant = convert_m3s_to_mmd(
+                y_instant[eval_subset, -prediction_length:, 0], upstream_area)
+            reg_loss_batch = self.loss_fun(
+                input=y_hat,
+                target=y,
+                reference=y_instant
+            )
+        else:
+            raise NotImplementedError(
+                f'`RegressionLoss(criterion={self.loss_fun.criterion}, ...)` not implemented.'
+            )
+
+        self.store_batch_losses(name='reg_loss', mode=mode, values=reg_loss_batch)
+        reg_loss = reg_loss_batch.mean()
+
+        if self.use_water_freq_constraint:
+            assert x_retention is not None, \
+                'with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.'
+
+            decay_const = torch.ones_like(batch.is_lake[:1]) * self.lake_constraint_rate_constant
+            current_step = torch.ones_like(batch.is_lake[:1]) * step
+            weight = torch.exp(-decay_const * current_step)
+            is_lake = batch.is_lake[subset] if mode == 'train' else batch.is_lake
+
+            t0 = torch.nn.functional.relu(-x_retention + 0.5)
+            t1 = torch.nn.functional.relu(x_retention - 0.1)
+
+            water_freq_loss = torch.where(is_lake > 0.5, t0, t1)
+
+            if water_freq_loss.dim() == 0:
+                if is_lake.all() == 1.0:
+                    water_freq_loss = water_freq_loss.mean()
+                else:
+                    water_freq_loss = 0.0
+            else:
+                if not is_lake.any():
+                    water_freq_loss = 0.0
+                else:
+                    water_freq_loss = water_freq_loss[is_lake == 1.0].mean()
+
+        else:
+            weight = 0.0
+            water_freq_loss = 0.0
+
+        loss = reg_loss + water_freq_loss * weight * 40
+
+        log_loss = {
+            'loss': loss,
+            'reg_loss': reg_loss,
+            'water_freq_loss': water_freq_loss,
+            'water_freq_loss_weight': weight
+        }
+
+        return loss, log_loss
+
+    @staticmethod
+    def get_sample_indices(batch) -> Tensor:
+        """Compute global sample indices from a batch object.
+
+        Args:
+            batch: An object containing 'mapping' (Tensor) and 'ptr' (Tensor) attributes.
+
+        Returns:
+            Tensor: The computed sample indices as a tensor.
+        """
+
+        return batch.mapping + batch.ptr[:-1]
+
+    def store_batch_losses(self, name: str, mode: Literal['train', 'valid', 'test'], values: Tensor) -> None:
+        """Store the batch loss values for a given loss name and mode.
+
+        Args:
+            name (str): The name of the loss metric.
+            mode (Literal['train', 'valid', 'test']): The mode indicating the phase ('train', 'valid', or 'test').
+            values (Tensor): The tensor containing loss values for the current batch.
+
+        Returns:
+            None
+        """
+
+        full_name = f'{mode}_{name}'
+        if name not in self.loss_state:
+            self.loss_state[full_name] = []
+
+        self.loss_state[full_name].append(values.detach().cpu())
+
+    def reset_loss_state(self, mode: Literal['train', 'valid', 'test']) -> None:
+        """Reset the loss state for the specified mode by removing all entries in `self.loss_state` for given mode.
+
+        Args:
+            mode (Literal['train', 'valid', 'test']): The mode for which to reset the loss state.
+        """
+
+        for key in list(self.loss_state.keys()):
+            if key.startswith(mode):
+                del self.loss_state[key]
