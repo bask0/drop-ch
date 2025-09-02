@@ -1,4 +1,4 @@
-"""Define the core runoff prediction model using LSTM architecture."""
+"""Defines the core runoff prediction model using LSTM architecture."""
 
 from math import ceil
 from typing import cast
@@ -12,8 +12,7 @@ from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
 class RunoffModel(torch.nn.Module):
-    """
-    Core runoff prediction model using an LSTM architecture.
+    """Core runoff prediction model using an LSTM architecture.
 
     This class implements the core architecture for runoff prediction based on
     static and dynamic input features. It supports normalization, optional unit
@@ -28,11 +27,9 @@ class RunoffModel(torch.nn.Module):
         num_dynamic_in: int,
         hidden_size: int = 64,
         lstm_layers: int = 1,
-        dropout: float = 0.0,
+        variational_dropout: float = 0.0,
         enc_dropout: float = 0.0,
-        prediction_length: int = 1,
         max_q_chunk_size: int = 50,
-        normalize_runoff: bool = False,
         use_precip_as_lake_runoff: bool = False,
         norm_args_stat_features: dict | None = None,
         norm_args_dyn_features: dict | None = None,
@@ -45,11 +42,11 @@ class RunoffModel(torch.nn.Module):
             num_dynamic_in (int): Number of dynamic input features (e.g., precipitation, temperature).
             hidden_size (int): Number of hidden units in the LSTM.
             lstm_layers (int): Number of stacked LSTM layers.
-            dropout (float): Dropout rate applied after LSTM layers.
-            enc_dropout (float): Dropout applied to input features before encoding.
-            prediction_length (int): Number of future time steps to predict.
+            variational_dropout (float), default=0.0
+                Variational dropout applied after the dynamic encoding layer.
+            enc_dropout (float), default=0.0
+                Dropout applied after the static encoding layer.
             max_q_chunk_size (int): Maximum number of nodes to process at once in chunked inference.
-            normalize_runoff (bool): If True, normalizes runoff targets during training.
             use_precip_as_lake_runoff (bool): If True, replaces lake runoff predictions with precipitation.
             norm_args_dyn_features: Normalization arguments for dynamic features, defaults to None.
             norm_args_stat_features: Normalization arguments for static features, defaults to None.
@@ -58,9 +55,7 @@ class RunoffModel(torch.nn.Module):
         """
 
         super().__init__()
-        self.prediction_length = prediction_length
         self.max_q_chunk_size = max_q_chunk_size
-        self.normalize_runoff = normalize_runoff
         self.use_precip_as_lake_runoff = use_precip_as_lake_runoff
 
         self.norm = TorchNormalizer(
@@ -74,14 +69,14 @@ class RunoffModel(torch.nn.Module):
             num_dynamic_in=num_dynamic_in,
             hidden_size=hidden_size,
             lstm_layers=lstm_layers,
-            dropout=dropout,
+            variational_dropout=variational_dropout,
             enc_dropout=enc_dropout
         )
 
     def forward(
             self,
             batch: HRUSample,
-            subset: Tensor,
+            subset: Tensor | None,
             scale_output: bool,
             sample_slice: slice | None = None) -> Tensor:
         """
@@ -97,8 +92,8 @@ class RunoffModel(torch.nn.Module):
             Tensor: Model output of shape [N, T, 1] where N is the number of nodes and
                 T is the number of output time steps.
         """
-        x = cast(Tensor, batch.x)
-        d = cast(Tensor, batch.d)
+        x = batch.x
+        d = batch.d
 
         if subset is not None:
             x = x[subset]
@@ -151,21 +146,21 @@ class RunoffModel(torch.nn.Module):
         for i in range(num_iter):
             start_sample = i * self.max_q_chunk_size
             end_sample = (i + 1) * self.max_q_chunk_size
-            out = self(
+            out[start_sample:end_sample] = self(
                 batch=batch,
                 subset=subset,
                 scale_output=scale_output,
                 sample_slice=slice(start_sample, end_sample)
             )
 
-        return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
+        return out
 
     def transform_output(self, batch: HRUSample, q: Tensor, scale_output: bool, subset: Tensor | None) -> Tensor:
         """
         Apply optional transformations to model output runoff predictions.
 
         This method scales and/or adjusts the raw runoff predictions (`q`) depending on:
-        - Whether the runoff was normalized during training (`normalize_runoff`)
+        - Whether the runoff was normalized during training
         - Whether lake runoff should be replaced with precipitation (`use_precip_as_lake_runoff`)
 
         Args:
@@ -197,16 +192,14 @@ class RunoffModel(torch.nn.Module):
             # Convert precipitation from mm/day to m³/s if model output is not in mm/day
             prec = convert_mmd_to_m3s(prec, hru_area[:, None, None])
 
-            if self.normalize_runoff:
-                # Normalize precipitation the same way runoff was normalized (divided by Q95)
-                prec = self.norm.norm_targets(prec)
+            prec = self.norm.norm_targets(prec)  # No-op if normalization is disabled.
 
             # Replace runoff predictions for lake HRUs with precipitation
             q[is_lake] = prec[is_lake]
 
         # --- Optional scaling: inverse normalization (restore to original scale) ---
         # Only applies if the model was trained on normalized runoff
-        if scale_output and self.normalize_runoff:
-            q = self.norm.norm_targets(q, invert=True)
+        if scale_output:
+            q = self.norm.norm_targets(q, invert=True)  # No-op if normalization is disabled.
 
         return q
