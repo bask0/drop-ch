@@ -14,6 +14,7 @@ This module defines the `TuningEngine` class and associated helpers for:
 """
 
 import logging
+import os
 from os import PathLike
 from pathlib import Path
 import shutil
@@ -116,6 +117,7 @@ class TuningEngine:
             monitor: str = 'val_loss',
             skip_tuning: bool = False,
             overwrite: bool = False,
+            resume: bool = False,
             profile: bool = False,
     ) -> None:
         """
@@ -132,6 +134,7 @@ class TuningEngine:
             monitor (str, optional): Metric to monitor for optimization. Defaults to 'val_loss'.
             skip_tuning (bool, optional): If True, skips the tuning process. Defaults to False.
             overwrite (bool, optional): If True, overwrites existing results and configurations. Defaults to False.
+            resume (bool, optional): If True, resumes optuna tuning. Defaults to False.
             profile (bool, optional): If True, enables profiling of the training process. Can be inspected
                 with tensorboard. Defaults to False.
 
@@ -141,6 +144,9 @@ class TuningEngine:
 
         if num_folds is None:
             raise ValueError("num_folds must be specified for TuningEngine.")
+
+        if overwrite and resume:
+            raise ValueError("Cannot use overwrite and resume together.")
 
         self.sampler = sampler
         self.pruner = pruner
@@ -152,6 +158,7 @@ class TuningEngine:
         self.monitor = monitor
         self.skip_tuning = skip_tuning
         self.overwrite = overwrite
+        self.resume = resume
         self.profile = profile
 
         self.tune_dir = self.log_dir / "tune"
@@ -223,14 +230,42 @@ class TuningEngine:
             raise FileNotFoundError(f"Experiment directory does not exist: {self.exp_dir}")
 
         if which in ("all", "tune"):
-            self._create_dirs_if_needed(self.tune_dir, remove=True)
-            self._init_optuna_study(self.tune_db)
+            if self.resume:
+                if not self.tune_db.exists():
+                    raise FileNotFoundError(
+                        f"Cannot resume tuning; database does not exist: {self.tune_db}"
+                    )
+                if not self.tune_dir.exists():
+                    raise FileNotFoundError(
+                        f"Tuning directory does not exist: {self.tune_dir}"
+                    )
+
+                logger.info("Resuming optuna tuning from existing database.")
+                return
+
+            else:
+                self._create_dirs_if_needed(self.tune_dir, remove=True)
+                self._init_optuna_study(self.tune_db)
 
         if which in ("all", "xval"):
-            self._create_dirs_if_needed(self.xval_dir, remove=True)
-            self._init_optuna_study(self.xval_db)
+            if self.resume:
+                if not self.xval_db.exists():
+                    raise FileNotFoundError(
+                        f"Cannot resume cross validation; database does not exist: {self.xval_db}"
+                    )
+                if not self.xval_dir.exists():
+                    raise FileNotFoundError(
+                        f"Cross validation directory does not exist: {self.xval_dir}"
+                    )
 
-        self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite)
+                logger.info("Resuming optuna cross validation from existing database.")
+                return
+
+            else:
+                self._create_dirs_if_needed(self.xval_dir, remove=True)
+                self._init_optuna_study(self.xval_db)
+
+        self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite or self.resume)
 
     def tune(self) -> optuna.Study:
         """
@@ -243,6 +278,8 @@ class TuningEngine:
         Returns:
             optuna.Study: The Optuna study object containing all trials and results.
         """
+
+        self.redirect_console_to_file(log_dir=self.tune_dir)
 
         if self.skip_tuning:
             logger.info("Skipping tuning as skip_tuning is enabled.")
@@ -288,6 +325,8 @@ class TuningEngine:
         Returns:
             optuna.Study: The Optuna study object containing the results of the cross-validation run.
         """
+
+        self.redirect_console_to_file(log_dir=self.xval_dir)
 
         study = self.run(is_tune=False, use_best_tuning_checkpoint=use_best_tuning_checkpoint)
 
@@ -522,7 +561,7 @@ class TuningEngine:
                     raise ValueError(f"Missing 'dtype' for categorical search space: {key}")
                 cast_fn = TYPE_MAP[spec["dtype"]]
                 val = trial.suggest_categorical(key, [cast_fn(val) for val in spec["choices"]])
-            elif suggestion_method in 'float':
+            elif suggestion_method == 'float':
                 kwargs = {
                     "low": float(spec["low"]),
                     "high": float(spec["high"]),
@@ -530,7 +569,7 @@ class TuningEngine:
                     "step": spec.get("step", None),
                 }
                 val = trial.suggest_float(key, **kwargs)
-            elif suggestion_method in 'int':
+            elif suggestion_method == 'int':
                 kwargs = {
                     "low": spec["low"],
                     "high": spec["high"],
@@ -749,3 +788,34 @@ class TuningEngine:
             else:
                 items.append((new_key, v))
         return dict(items)
+
+    def redirect_console_to_file(self, log_dir: PathLike | str = "logs"):
+        """Redirect stdout and stderr to a log file (also keep printing to console)."""
+        log_dir = Path(log_dir) / "logfiles"
+
+        os.makedirs(log_dir, exist_ok=True)
+
+        log_file = log_dir / f"run_{os.getpid()}.log"
+        log_fh = open(log_file, "a")
+
+        class Tee:
+            """Write to both console and file."""
+
+            def __init__(self, original_stream, file_stream):
+                self.original_stream = original_stream
+                self.file_stream = file_stream
+
+            def write(self, message):
+                self.original_stream.write(message)
+                self.file_stream.write(message)
+                self.flush()
+
+            def flush(self):
+                self.original_stream.flush()
+                self.file_stream.flush()
+
+        sys.stdout = Tee(sys.__stdout__, log_fh)
+        sys.stderr = Tee(sys.__stderr__, log_fh)
+
+        print(f"Console output → {log_file}")
+        return log_file
