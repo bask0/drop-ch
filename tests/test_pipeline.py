@@ -88,7 +88,6 @@ def test_lumped_pipeline_smoke(stat_features, dyn_features, graph_data_module, b
         enc_dropout=0.1,
         prediction_length=20,
         max_q_chunk_size=1000,
-        normalize_runoff=True,
         convert_to_mm=True,
         use_precip_as_lake_runoff=False,
         norm_args_stat_features=graph_data_module.norm_args_stat_features,
