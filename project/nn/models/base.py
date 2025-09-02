@@ -2,7 +2,7 @@
 
 import torch
 
-from project.utils.torch.normalize import DataTansform
+from project.utils.torch.normalize import DataTansform, NoNormalizer
 from project.utils.typing import HRUSample
 
 
@@ -39,22 +39,22 @@ class TorchNormalizer(torch.nn.Module):
         if norm_args_dyn_features is not None:
             self.norm_dyn_features = DataTansform(**norm_args_dyn_features)
         else:
-            self.norm_dyn_features = torch.nn.Identity()
+            self.norm_dyn_features = NoNormalizer()
 
         if norm_args_stat_features is not None:
             self.norm_stat_features = DataTansform(**norm_args_stat_features)
         else:
-            self.norm_stat_features = torch.nn.Identity()
+            self.norm_stat_features = NoNormalizer()
 
         if norm_args_stat_routing_features is not None:
             self.norm_stat_routing_features = DataTansform(**norm_args_stat_routing_features)
         else:
-            self.norm_stat_routing_features = torch.nn.Identity()
+            self.norm_stat_routing_features = NoNormalizer()
 
         if norm_args_targets is not None:
             self.norm_targets = DataTansform(**norm_args_targets)
         else:
-            self.norm_targets = torch.nn.Identity()
+            self.norm_targets = NoNormalizer()
 
     def normalize_inputs(self, batch: HRUSample) -> HRUSample:
         """
