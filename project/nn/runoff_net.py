@@ -1,4 +1,4 @@
-"""Defines the RunofNet, a lightnign model with training routing for runoff prediction."""
+"""Defines the RunofNet, a lightning model with training routing for runoff prediction."""
 
 from typing import Literal
 import torch
@@ -29,15 +29,13 @@ class RunoffNet(LightningModuleWithSummary):
             num_dynamic_in: int,
             hidden_size: int = 64,
             lstm_layers: int = 1,
-            dropout: float = 0.0,
+            variational_dropout: float = 0.0,
             enc_dropout: float = 0.0,
             max_q_chunk_size: int = 50,
             learning_rate: float = 0.001,
             weight_decay: float = 0.0,
             prediction_length: int | None = None,
-            normalize_runoff: bool = False,
             use_precip_as_lake_runoff: bool = False,
-            log_transform: bool = False,
             norm_args_stat_features: dict | None = None,
             norm_args_dyn_features: dict | None = None,
             norm_args_targets: dict | None = None,
@@ -60,24 +58,20 @@ class RunoffNet(LightningModuleWithSummary):
                 Number of hidden units in each LSTM layer.
             lstm_layers : int, default=1
                 Number of stacked LSTM layers in the sequence model.
-            dropout : float, default=0.0
-                Dropout probability between LSTM layers.
+            variational_dropout : float, default=0.0
+                Variational dropout applied after the dynamic encoding layer.
             enc_dropout : float, default=0.0
-                Dropout probability applied in the encoder portion of the model.
+                Dropout applied after the static encoding layer.
             max_q_chunk_size : int, default=50
-                Maximum sequence length processed in one chunk to manage memory usage.
+                Maximum subset length processed in one chunk to manage memory usage.
             learning_rate : float, default=0.001
                 Learning rate for the optimizer.
             weight_decay : float, default=0.0
                 Weight decay (L2 regularization) for the optimizer.
             prediction_length : int, required
                 Number of timesteps to predict. Must be specified.
-            normalize_runoff : bool, default=False
-                If True, normalizes runoff targets and predictions during training.
-            use_precip_as_lake_runoff : bool, default=False
+            use_precip_as_lake_runoff : bool, default=True
                 If True, substitutes precipitation data as runoff for lake basins with no observations.
-            log_transform : bool, default=False
-                If True, applies a log transform to runoff values in the loss function.
             norm_args_dyn_features:
                 Normalization arguments for dynamic features, defaults to None.
             norm_args_stat_features:
@@ -105,7 +99,6 @@ class RunoffNet(LightningModuleWithSummary):
             raise ValueError('`prediction_length` must be provided.')
         self.prediction_length = prediction_length
 
-        self.normalize_runoff = normalize_runoff
         self.use_precip_as_lake_runoff = use_precip_as_lake_runoff
 
         self.runoff_lstm = RunoffModel(
@@ -113,18 +106,16 @@ class RunoffNet(LightningModuleWithSummary):
             num_dynamic_in=num_dynamic_in,
             hidden_size=hidden_size,
             lstm_layers=lstm_layers,
-            dropout=dropout,
+            variational_dropout=variational_dropout,
             enc_dropout=enc_dropout,
-            prediction_length=prediction_length,
             max_q_chunk_size=max_q_chunk_size,
-            normalize_runoff=normalize_runoff,
             use_precip_as_lake_runoff=use_precip_as_lake_runoff,
             norm_args_dyn_features=norm_args_dyn_features,
             norm_args_stat_features=norm_args_stat_features,
             norm_args_targets=norm_args_targets,
         )
 
-        self.loss_fun = RegressionLoss(criterion='l2', log_transform=log_transform)
+        self.loss_fun = RegressionLoss(criterion='l2', log_transform=False)
 
     def log_loss(self, loss: dict[str, Tensor], batch: HRUSample, mode: Literal['train', 'valid', 'test']) -> None:
         """
@@ -196,12 +187,13 @@ class RunoffNet(LightningModuleWithSummary):
         if subset is not None:
             y = y[subset]
 
-        if self.normalize_runoff:
-            y = self.runoff_lstm.norm.norm_targets(y)
+        y = self.runoff_lstm.norm.norm_targets(y)  # No-op if normalization is disabled.
+
+        cutoff = slice(-self.prediction_length, None) if subset == 'train' else slice(None, None)
 
         loss = self.loss_fun(
-            y_hat[:, -self.prediction_length:, ...],
-            y[:, -self.prediction_length:, ...]
+            y_hat[:, cutoff, ...],
+            y[:, cutoff, ...]
         )
 
         return y_hat, loss
@@ -291,8 +283,7 @@ class RunoffNet(LightningModuleWithSummary):
 
         y_hat_mmd, _ = self.common_step(batch, subset=None, chunked=False)
 
-        if self.normalize_runoff:
-            y_hat_mmd = self.runoff_lstm.norm.norm_targets(y_hat_mmd, invert=True)
+        y_hat_mmd = self.runoff_lstm.norm.norm_targets(y_hat_mmd, invert=True)  # No-op if normalization is disabled.
 
         area = batch.hru_area[:, None, None]  # type: ignore
         y_hat_m3s = convert_mmd_to_m3s(y_hat_mmd, area)
