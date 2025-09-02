@@ -25,7 +25,6 @@ Typical usage:
 """
 
 import importlib
-from typing import Any
 import warnings
 from jsonargparse import namespace_to_dict
 import lightning.pytorch as pl
@@ -102,13 +101,6 @@ class CLI(LightningCLI):
         )
 
         parser.link_arguments(source="data.init_args.num_folds", target="tuning_engine.num_folds")
-
-        # Search space configuration
-        parser.add_argument(
-            "--search_space",
-            type=dict[str, Any],
-            help="Search space for hyperparameter tuning"
-        )
 
         # Forced callbacks
         parser.add_lightning_class_args(EarlyStopping, "early_stopping_callback")
