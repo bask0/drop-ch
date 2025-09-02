@@ -218,6 +218,7 @@ def _get_xflow_bias(
     return da_res
 
 
+
 def _flv(
         obs: xr.DataArray,
         mod: xr.DataArray,
@@ -253,7 +254,7 @@ def _fhv(
 METRIC_MAPPING: dict[str, dict] = dict(
     bias={'func': _bias, 'name': 'Bias', 'direction': 'none'},
     absbias={'func': _absbias, 'name': 'Absolute bias', 'direction': 'min'},
-    relbias={'func': _relbias, 'name': 'Percentage bias', 'direction': 'none'},
+    relbias={'func': _relbias, 'name': '%Bias', 'direction': 'none'},
     mse={'func': _mse, 'name': 'Mean squared error', 'direction': 'min'},
     bias2={'func': _bias2, 'name': 'Squared bias', 'direction': 'min'},
     varerr={'func': _varerr, 'name': 'Variance error', 'direction': 'min'},
@@ -263,8 +264,8 @@ METRIC_MAPPING: dict[str, dict] = dict(
     nnse={'func': _nnse, 'name': 'Normalized modeling efficiency', 'direction': 'max'},
     kge={'func': _kge, 'name': 'Kling-Gupta efficiency', 'direction': 'max'},
     r={'func': _r, 'name': 'Pearson\'s correlation', 'direction': 'max'},
-    flv={'func': _flv, 'name': 'Percentage bias low flow', 'direction': 'none'},
-    fhv={'func': _fhv, 'name': 'Percentage bias high flow', 'direction': 'none'},
+    flv={'func': _flv, 'name': '%Bias FLV', 'direction': 'none'},
+    fhv={'func': _fhv, 'name': '%Bias FHV', 'direction': 'none'},
 )
 
 
