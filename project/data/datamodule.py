@@ -200,7 +200,6 @@ class HRUData(InMemoryDataset):
             self._check_variables(ds=ds, variables=self.dyn_features, expected_dims={'hru', 'time'})
 
         self.ds = ds
-        self.ds['has_any_obs'] = ds.Q_obs_m3s.notnull().any('hru').compute()
 
     def len(self) -> int:
         """Return the number of samples in the dataset."""
@@ -299,7 +298,7 @@ class HRUData(InMemoryDataset):
             y=Q_obs,
             prec=None,
             tair=None,
-            hru_index=hru_idx,
+            hru_idx=hru_idx,
             hru_area=upstream_area,
             is_lake=is_lake,
             water_freq=water_freq,
@@ -368,7 +367,7 @@ class HRUData(InMemoryDataset):
             y=q_prevah,
             prec=prec,
             tair=tair,
-            hru_index=hru_idx,
+            hru_idx=hru_idx,
             hru_area=hru_area,
             is_lake=is_lake,
             water_freq=water_freq,
@@ -466,7 +465,7 @@ class HRUData(InMemoryDataset):
             edge_index=edge_index,
             k_hops=self.k_hops,
             mapping=mapping,
-            hru_idx=hru_idx,
+            hru_idx=subset,
             hru_area=hru_area,
             is_lake=is_lake,
             water_freq=water_freq,
