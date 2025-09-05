@@ -108,6 +108,7 @@ class PredictionWriter(BasePredictionWriter):
         datamodule = cast(pl.LightningDataModule, trainer.datamodule)  # type: ignore
         pdl = cast(DataLoader, trainer.predict_dataloaders)  # type: ignore
         ds = cast(xr.Dataset, pdl.dataset.ds.copy())  # type: ignore
+        k_hops = getattr(pdl.dataset, 'k_hops', None)  # type: ignore
 
         # Prediction varaibles sample
         p = predictions[0]['data']
@@ -120,11 +121,25 @@ class PredictionWriter(BasePredictionWriter):
         # Initialize subset and prediction variables
         ds['subset'] = xr.full_like(ds.area, fill_value=0, dtype='int32')
         for var, ref in zip(save_variables, reference_variables):
-            ds[var] = xr.full_like(ds[ref], fill_value=np.nan, dtype='float32')
+            if p[var].get('is_downstream_aligned', False):
+                if k_hops is None:
+                    raise ValueError("k_hops is required for downstream aligned variables.")
+                ds[var] = xr.full_like(
+                    ds['area'].expand_dims(k=range(k_hops), axis=1),
+                    fill_value=np.nan,
+                    dtype='float32')
+            else:
+                ds[var] = xr.full_like(
+                    ds[ref],
+                    fill_value=np.nan,
+                    dtype='float32')
+
             for attr in ['units', 'long_name']:
                 val = p[var][attr]
                 ds[var].attrs[attr] = val
-                ds[ref].attrs[attr] = val
+
+                if not p[var].get('exclude_ref_from_zarr', False):
+                    ds[ref].attrs[attr] = val
 
         # Assign subset values based on HRUs from datamodule
         if datamodule.train_hrus is not None:  # type: ignore
@@ -138,19 +153,35 @@ class PredictionWriter(BasePredictionWriter):
 
         # Insert predictions into dataset
         for pred in predictions:
-            hru_subset = pred['batch'].hru_index  # type: ignore
-            time_subset = slice(
-                pred['batch'].time_slice[0][0] + datamodule.temporal_context_length,  # type: ignore
-                pred['batch'].time_slice[1][0]  # type: ignore
-            )
+            hru_subset = pred['batch'].hru_idx
+            time_slice = pred['batch'].time_slice
+
+            # Depending on collate (PYG vs PyTorch), time_slice gets stacked differently.
+            if isinstance(time_slice[0], list):
+                time_subset = slice(
+                    time_slice[0][0],
+                    time_slice[0][1]
+                )
+            else:
+                time_subset = slice(
+                    time_slice[0][0],
+                    time_slice[1][0]
+                )
+
             for var in save_variables:
-                ds[var][{
-                    'hru': hru_subset,
-                    'time': time_subset
-                }] = pred['data'][var]['ds'][..., datamodule.temporal_context_length:, 0].T  # type: ignore
+                if p[var].get('is_downstream_aligned', False):
+                    ds[var][{
+                        'hru': hru_subset,
+                    }] = pred['data'][var]['ds']
+                else:
+                    ds[var][{
+                        'hru': hru_subset,
+                        'time': time_subset
+                    }] = pred['data'][var]['ds'][..., datamodule.temporal_context_length:, 0].T  # type: ignore
 
         # Keep only selected variables if specified
         if not self.write_all_variables:
+            reference_variables = [v for v in reference_variables if v is not None]
             ds = ds[save_variables + reference_variables + ['subset', 'has_obs']]
 
         encoding = get_zarr_v3_encoding(ds)
