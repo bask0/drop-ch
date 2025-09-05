@@ -87,7 +87,7 @@ class HRUSample:
     y: Tensor
     prec: Tensor | None
     tair: Tensor | None
-    hru_index: Tensor
+    hru_idx: Tensor
     hru_area: Tensor
     is_lake: Tensor | None
     water_freq: Tensor | None
