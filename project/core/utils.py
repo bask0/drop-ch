@@ -150,6 +150,7 @@ class PredictionWriter(BasePredictionWriter):
             ds['subset'].loc[{'hru': datamodule.test_hrus}] = 3  # type: ignore
 
         ds['subset'].attrs['legend'] = '0: no set, 1: train, 2: valid, 3: test'
+        temporal_context_length = datamodule.temporal_context_length  # type: ignore
 
         # Insert predictions into dataset
         for pred in predictions:
@@ -159,12 +160,12 @@ class PredictionWriter(BasePredictionWriter):
             # Depending on collate (PYG vs PyTorch), time_slice gets stacked differently.
             if isinstance(time_slice[0], list):
                 time_subset = slice(
-                    time_slice[0][0],
+                    time_slice[0][0] + temporal_context_length,
                     time_slice[0][1]
                 )
             else:
                 time_subset = slice(
-                    time_slice[0][0],
+                    time_slice[0][0] + temporal_context_length,
                     time_slice[1][0]
                 )
 
