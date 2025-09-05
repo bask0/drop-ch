@@ -160,6 +160,7 @@ class StreamflowNet(pl.LightningModule):
         self.routing_weight_decay = routing_weight_decay
         self.routing_pct_start = routing_pct_start
         self.routing_max_lr_factor = routing_max_lr_factor
+        self.prediction_length = prediction_length
 
         # -------- RunoffNet --------
         #############################
@@ -423,7 +424,7 @@ class StreamflowNet(pl.LightningModule):
             mode='train',
             step=self.current_epoch,
             x_retention=retention,
-            prediction_length=self.routing_net.prediction_length
+            prediction_length=self.prediction_length
         )
 
         runoff_optimizer, evaporation_optimizer, routing_optimizer = cast(
@@ -517,25 +518,79 @@ class StreamflowNet(pl.LightningModule):
         # Handle R (batch x time substeps)
 
         row, col, val = T.coo()
-        T_down = SparseTensor(row=col, col=k, value=val)
+        T_down = SparseTensor(row=col, col=k, value=val).to_dense()
         row, col, val = D.coo()
-        D_down = SparseTensor(row=col, col=k, value=val)
+        D_down = SparseTensor(row=col, col=k, value=val).to_dense()
 
-        return_dict = {
-            'Q': Q,
-            'S': S,
-            'R': R,
-            'Q_instant': Q_instant,
-            'q': q,
-            'e': e,
-            'batch': batch,
-            'T': T,
-            'T_down': T_down,
-            'D': D,
-            'D_down': D_down,
+        data = {
+            'Q_pred_m3s': {
+                'ds': Q.to('cpu'),
+                'units': 'm³/s',
+                'long_name': 'Volumetric streamflow',
+                'obs_counterpart': 'Q_obs_m3s',
+            },
+            'Q_instant_pred_m3s': {
+                'ds': Q_instant.to('cpu'),
+                'units': 'm³/s',
+                'long_name': 'Volumetric instantaneous streamflow',
+                'obs_counterpart': 'Q_obs_m3s',
+                'exclude_ref_from_zarr': True,
+            },
+            'q_pred_m3s': {
+                'ds': q.to('cpu'),
+                'units': 'm³/s',
+                'long_name': 'Volumetric runoff',
+                'obs_counterpart': 'Q_obs_m3s',
+                'exclude_ref_from_zarr': True,
+            },
+            'e_pred_m3s': {
+                'ds': e.to('cpu'),
+                'units': 'm³/s',
+                'long_name': 'Volumetric evaporation',
+                'obs_counterpart': 'Q_obs_m3s',
+                'exclude_ref_from_zarr': True,
+            },
+            'S_pred_m3': {
+                'ds': S.to('cpu'),
+                'units': 'm³',
+                'long_name': 'Volumetric water storage',
+                'obs_counterpart': 'Q_obs_m3s',
+                'exclude_ref_from_zarr': True,
+            },
+            'R_pred': {
+                'ds': R.to('cpu'),
+                'units': '-',
+                'long_name': 'Retention',
+                'obs_counterpart': 'Q_obs_m3s',
+                'exclude_ref_from_zarr': True,
+            },
+            'T_down': {
+                'ds': T_down.to('cpu'),
+                'units': '-',
+                'long_name': 'Downstream transport matrix',
+                'obs_counterpart': None,
+                'is_downstream_aligned': True,
+                'exclude_ref_from_zarr': True,
+            },
+            'D_down': {
+                'ds': D_down.to('cpu'),
+                'units': '-',
+                'long_name': 'Downstream discharge matrix',
+                'obs_counterpart': None,
+                'is_downstream_aligned': True,
+                'exclude_ref_from_zarr': True,
+            },
         }
 
-        return {k: v.to('cpu') for k, v in return_dict.items()}
+        return_dict = {
+            'data': data,
+            'batch': batch.to('cpu'),
+            'obs_var': 'Q_obs_m3s',
+            'pred_var': 'Q_pred_m3s',
+        }
+
+        return return_dict
+
 
     def configure_optimizers(self) -> tuple[dict, dict, dict]:
         """Configure and returns optimizers and learning rate schedulers for the model's sub-networks.
@@ -709,6 +764,8 @@ class StreamflowNet(pl.LightningModule):
 
         """
 
+        experiment_dir = Path(experiment_dir)
+
         hits = []
         for root, _, files in os.walk(experiment_dir, followlinks=True):
             if 'optuna.db' in files:
@@ -722,13 +779,30 @@ class StreamflowNet(pl.LightningModule):
             raise ValueError(f'Multiple \'**/tune/optuna.db\' files found in {experiment_dir}, please specify '
                              f'a directory with only one such file. Hits were:')
 
-        study = optuna.load_study(study_name='experiment', storage=f'sqlite:///{hits[0]}')
-        best_checkpoint = study.best_trial.user_attrs['best_checkpoint']
+        # The optuna.db file should be unique in the tune subdirectory, e.g., /path/tune/optuna.db
+        optuna_db_path = Path(hits[0])
 
-        return Path(best_checkpoint)
+        # Load the study
+        study = optuna.load_study(study_name=None, storage=f'sqlite:///{optuna_db_path}')
+
+        # Get the tuning dir as saved in the study, e.g., /old/path/tune
+        tune_dir = Path(study.user_attrs['tune_dir'])
+
+        # Get the best checkpoint path as saved in the study, e.g., /old/path/tune/trial_006/checkpoints/best.ckpt
+        best_ckpt_old = Path(study.best_trial.user_attrs['best_checkpoint'])
+
+        # Get the relative path of the best checkpoint to the tuning dir, e.g., trial_006/checkpoints/best.ckpt
+        best_ckpt_rel = best_ckpt_old.relative_to(tune_dir)
+
+        # Construct the new best checkpoint path by replacing the old tuning dir with the parent dir of
+        # the optuna.db file (/path/tune/)
+        best_ckpt = optuna_db_path.parent / best_ckpt_rel
+
+        return best_ckpt
 
     def _get_best_runoff_net(
-            self, experiment_dir: str | Path,
+            self,
+            experiment_dir: str | Path,
             use_pretrained: bool,
             **overwrite_kwargs) -> RunoffModel:
         """Get the best RunoffNet model checkpoint from the specified experiment directory.
