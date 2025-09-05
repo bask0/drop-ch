@@ -515,12 +515,12 @@ class StreamflowNet(pl.LightningModule):
         Q, S, R, T, D, k, q, e, retention = self.inference_forward(batch=batch)
         _, Q_instant = self.instant_forward(batch=batch)
 
-        # Handle R (batch x time substeps)
+        k_hops = batch.k_hops[0].item()  # type: ignore
 
         row, col, val = T.coo()
-        T_down = SparseTensor(row=col, col=k, value=val).to_dense()
+        T_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
         row, col, val = D.coo()
-        D_down = SparseTensor(row=col, col=k, value=val).to_dense()
+        D_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
 
         data = {
             'Q_pred_m3s': {
@@ -584,13 +584,12 @@ class StreamflowNet(pl.LightningModule):
 
         return_dict = {
             'data': data,
-            'batch': batch.to('cpu'),
+            'batch': batch.to('cpu'),  # type: ignore
             'obs_var': 'Q_obs_m3s',
             'pred_var': 'Q_pred_m3s',
         }
 
         return return_dict
-
 
     def configure_optimizers(self) -> tuple[dict, dict, dict]:
         """Configure and returns optimizers and learning rate schedulers for the model's sub-networks.
