@@ -59,6 +59,7 @@ data:
 
 trainer:
   max_epochs: 200
+  gradient_clip_val: 1.0
 
 tuning_engine:
   exp_dir: experiments/lumped

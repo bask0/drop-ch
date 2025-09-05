@@ -5,4 +5,4 @@ data:
 
 tuning_engine:
   exp_dir: experiments/routed/hard
-  log_dir: /net/argon/landclim/kraftb/machflow_routing/logs/routed/hard
+  log_dir: /cluster/home/kraftb/runs/routed/hard

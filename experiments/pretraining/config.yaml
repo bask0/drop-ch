@@ -47,6 +47,7 @@ trainer:
     class_path: lightning.pytorch.callbacks.TQDMProgressBar
     init_args:
       refresh_rate: 60
+  gradient_clip_val: 1.0
 
 tuning_engine:
   exp_dir: experiments/pretraining
