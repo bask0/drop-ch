@@ -78,6 +78,10 @@ conda env create -f environment.yaml
 conda activate [ENV NAME]
 ```
 
+You mey need to install chrome for plotly
+
+`plotly_get_chrome`
+
 Run hyperparameter tuning and cross validation.
 
 ```bash
