@@ -2,6 +2,7 @@
 
 from glob import glob
 import os
+import geopandas as gpd
 import xarray as xr
 
 
@@ -54,3 +55,40 @@ def load_xval_test_set(
         preprocess=lambda x: sel_cv_set(ds=x, cv_sets=3))
 
     return ds.sel(**subset).compute()
+
+
+def enrich(
+        ds: xr.Dataset | xr.DataArray,
+        hrus: gpd.GeoDataFrame,
+        variables: str | list[str]) -> gpd.GeoDataFrame:
+    """Enrich GeoDataFrame with variables from xarray Dataset or DataArray.
+
+    Args:
+        ds (xr.Dataset | xr.DataArray): xarray Dataset or DataArray containing the variables to add.
+        hrus (gpd.GeoDataFrame): GeoDataFrame containing the HRUs.
+        variables (str | list[str]): Variable name or list of variable names to add to the GeoDataFrame.
+
+    Returns:
+        gpd.GeoDataFrame: GeoDataFrame enriched with the specified variables.
+    """
+
+    if isinstance(variables, str):
+        variables = [variables]
+        if isinstance(ds, xr.DataArray):
+            ds = ds.to_dataset(name=variables[0])
+    elif isinstance(variables, list):
+        if isinstance(ds, xr.DataArray):
+            raise ValueError('If \'ds\' is a DataArray, \'variables\' must be a string.')
+    else:
+        raise ValueError('\'variables\' must be a string or a list of strings.')
+
+    hrus = hrus.copy()
+
+    for var in variables:
+        if var not in ds.data_vars:
+            raise ValueError(f'Variable {var} not found in DataArray \'ds\'.')
+
+        hrus[var] = gpd.pd.Series(dtype=ds[var].dtype)
+        hrus.loc[ds.hru.values, var] = ds[var].values
+
+    return hrus
