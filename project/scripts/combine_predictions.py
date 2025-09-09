@@ -3,6 +3,7 @@
 from argparse import ArgumentParser
 import logging
 from pathlib import Path
+import numpy as np
 import xarray as xr
 from zarr.codecs import BloscCodec, BloscShuffle
 
@@ -155,6 +156,17 @@ def main(pred_root: str, base_path: str, out_path: str) -> None:
     ds_merged = xr.merge([base_ds, pred_datasets])
 
     enc = get_encoding(ds_merged)
+
+    # Make sure that setups with multiple models have the same subset (data splitting).
+    unique_setups = np.unique([model.split('_')[1] for model in ds_merged.model.values])
+    for setup in unique_setups:
+        models = [model for model in ds_merged.model.values if setup in model]
+        if len(models) > 1:
+            ref_model = models[0]
+            for model in models[1:]:
+                if not ds_merged.subset.sel(model=ref_model).drop_vars('model').equals(
+                        ds_merged.subset.sel(model=model).drop_vars('model')):
+                    raise ValueError(f'Models subset (data splitting) does not match: {ref_model}, {model}!')
 
     ds_merged.to_zarr(out_path, mode='w', encoding=enc)
 
