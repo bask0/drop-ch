@@ -4,6 +4,7 @@ import os
 from os import PathLike
 from pathlib import Path
 import shutil
+import warnings
 import geopandas as gpd
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
@@ -14,6 +15,12 @@ import xarray as xr
 
 from project.utils.data import load_xval_test_set
 from project.utils.metrics import compute_metrics
+
+# TODO: Make this more flexible, but tuning_engine does not have access to data paths.
+HRU_FILE_CANDIDATES = [
+    Path('/net/argon/landclim/kraftb/machflow_routing/data/processed/hrus/hrus.gpkg'),
+    Path('/cluster/home/kraftb/data/machflow_routing/processed/hrus/hrus.gpkg')
+]
 
 
 def despine(ax: Axes, which: str = 'L', remove_ticks: bool = False) -> None:
@@ -69,7 +76,7 @@ def _optuna_plots(study: optuna.Study, out_dir: str | PathLike, is_xval: bool = 
         try:
             fig = getattr(optuna.visualization, optuna_plot)(study)
 
-            fig.write_image(os.path.join(out_dir, optuna_plot + '.png'), scale=2)
+            fig.write_image(os.path.join(out_dir, optuna_plot + '.png'), scale=2, width=1600, height=1200)
         except RuntimeError as e:
             print(
                 'The following RuntimeError was raised (and ignored) for plot \'{optuna_plot}\':\n', e
@@ -80,12 +87,13 @@ def _optuna_plots(study: optuna.Study, out_dir: str | PathLike, is_xval: bool = 
             )
 
 
-def plot_optuna_summary(study_path: str | PathLike, study_name: str = 'Experiment', is_xval: bool = False) -> None:
+def plot_optuna_summary(study_path: str | PathLike, study_name: str | None = None, is_xval: bool = False) -> None:
     """Create and save optuna plots for a given study.
 
     Args:
         study_path (str | PathLike): Path to the study database.
-        study_name (str): Name of the study. Defaults to 'Experiment'.
+        study_name (str | None): Name of the study. If None, checks whether the storage contains a single study,
+            and if so loads that study. Defaults to None.
         is_xval (bool): If True, use cross-validation plots. Defaults to False.
 
     """
@@ -326,8 +334,23 @@ def plot_xval_sets(xval_dir: str | PathLike) -> None:
         'Test': '#D81B60'
     }
 
+    hru_path = None
+    for candidate in HRU_FILE_CANDIDATES:
+        if candidate.exists():
+            hru_path = candidate
+            break
+
+    if hru_path is None:
+        warnings.warn(
+            'Could not find HRU file, `plot_xval_sets` not executed. The following paths are currently checked '
+            f'(defined in {__file__}.HRU_FILE_CANDIDATES):\n'
+            '\n'.join(map(str, HRU_FILE_CANDIDATES)), stacklevel=2
+        )
+        return
+
     poly = gpd.read_file(
-        '/net/argon/landclim/kraftb/machflow_routing/data/processed/hrus/hrus.gpkg', use_arrow=True).set_index('EZGNR')
+        hru_path,
+        use_arrow=True).set_index('EZGNR')
 
     paths = glob(os.path.join(xval_dir, 'fold_*/preds.zarr'))
 
