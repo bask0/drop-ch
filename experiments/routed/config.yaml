@@ -3,20 +3,20 @@ model:
   init_args:
     runoff_net_exp_dir: experiments/pretraining/
     runoff_use_pretrained: true
-    runoff_lr: 0.001
+    runoff_lr: 0.0001
     runoff_weight_decay: 0.0
-    runoff_max_lr_factor: 50.0
-    runoff_pct_start: 0.03
+    runoff_max_lr_factor: 10.0
+    runoff_pct_start: 0.2
     evaporation_enabled: false
     evaporation_lr: 0.01
     routing_dynamic_modulation: false
     routing_hidden_size: 16
     routing_time_substeps: 1
-    routing_lr: 0.001
+    routing_lr: 0.0001
     routing_weight_decay: 0.0
-    routing_pct_start: 0.03
-    routing_max_lr_factor: 50.0
-    lake_constraint_rate_constant: 0.3
+    routing_pct_start: 0.05
+    routing_max_lr_factor: 100.0
+    lake_constraint_rate_constant: 0.1
     num_samples_per_graph: 20
     max_q_chunk_size: 200
 
@@ -107,14 +107,14 @@ tuning_engine:
     model:
       runoff_lr:
         method: float
-        low: 1e-4
-        high: 1e-2
+        low: 1e-5
+        high: 1e-3
         log: True
 
       runoff_weight_decay:
         method: float
         low: 1e-5
-        high: 1e-2
+        high: 1e-3
         log: True
 
       evaporation_enabled:
@@ -124,8 +124,8 @@ tuning_engine:
 
       evaporation_lr:
         method: float
-        low: 1e-4
-        high: 1e-2
+        low: 1e-5
+        high: 1e-3
         log: True
 
       routing_dynamic_modulation:
@@ -136,7 +136,7 @@ tuning_engine:
       routing_hidden_size:
         method: int
         low: 16
-        high: 128
+        high: 64
         step: 16
 
       routing_time_substeps:
@@ -147,12 +147,12 @@ tuning_engine:
 
       routing_lr:
         method: float
-        low: 1e-4
+        low: 1e-5
         high: 1e-2
         log: True
 
       routing_weight_decay:
         method: float
         low: 1e-5
-        high: 1e-2
+        high: 1e-3
         log: True
