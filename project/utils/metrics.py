@@ -49,6 +49,8 @@ def _relbias(
 
     relbias = (mod.mean(dim=dim, skipna=True) - obs.mean(dim=dim, skipna=True)) / obs.mean(dim=dim, skipna=True) * 100
 
+    relbias.attrs['units'] = '%'
+
     return relbias.compute()
 
 
@@ -107,7 +109,11 @@ def _r(
         mod: xr.DataArray,
         dim: Dims) -> xr.DataArray:
 
-    return xr.corr(obs, mod, dim=dim).compute()
+    res = xr.corr(obs, mod, dim=dim).compute()
+
+    res.attrs['units'] = '%'
+
+    return res
 
 
 def _nse(
@@ -122,6 +128,8 @@ def _nse(
 
     nse = nse.where(mod.notnull().any(dim), np.nan)
 
+    nse.attrs['units'] = '-'
+
     return nse.compute()
 
 
@@ -131,6 +139,8 @@ def _nnse(
         dim: Dims) -> xr.DataArray:
 
     nse = _nse(obs=obs, mod=mod, dim=dim)
+
+    nse.attrs['units'] = '-'
 
     return (1 / (2 - nse)).compute()
 
@@ -145,6 +155,8 @@ def _kge(
     beta = mod.mean(dim=dim) / obs.mean(dim=dim)
 
     value = ((r - 1)**2 + (alpha - 1)**2 + (beta - 1)**2)
+
+    value.attrs['units'] = '-'
 
     return (1 - value ** 0.5).compute()
 
@@ -181,7 +193,7 @@ def _get_sorted_fraction(x, fraction, direction):
 
         num_valid = np.isfinite(x_sorted).sum()
         num_cut = np.round(fraction * num_valid).astype(int)
-        x_sorted[-num_cut:] = np.nan
+        x_sorted[num_cut:] = np.nan
 
         x[idx] = x_sorted
 
@@ -198,25 +210,22 @@ def _get_xflow_bias(
     obs = obs.transpose(..., dim)
     mod = mod.transpose(..., dim)
 
-    obs_da, mod_da = common_mask(obs=obs, mod=mod, dim=dim, drop_empty=True)
+    obs_da, mod_da = common_mask(obs=obs, mod=mod, dim=dim)
 
     obs_s = _get_sorted_fraction(x=obs_da.values, fraction=fraction, direction=direction)
     mod_s = _get_sorted_fraction(x=mod_da.values, fraction=fraction, direction=direction)
 
-    if direction == 'low':
-        obs_s = np.log(obs_s.clip(1e-6, None))
-        mod_s = np.log(mod_s.clip(1e-6, None))
+    obs_mean = np.nanmean(obs_s, axis=-1)
+    mod_mean = np.nanmean(mod_s, axis=-1)
 
-    qsl = np.nansum(mod_s - np.nanmin(mod_s, axis=-1, keepdims=True), axis=-1)
-    qol = np.nansum(obs_s - np.nanmin(obs_s, axis=-1, keepdims=True), axis=-1)
+    res = (mod_mean - obs_mean) / (obs_mean + 1e-6)
 
-    res = -1 * (qsl - qol) / (qol + 1e-6)
-
-    da_res = mod.isel({dim: 0}).drop_vars(dim).copy().load()
+    da_res = obs_da.isel({dim: 0}).drop_vars(dim).copy().load()
     da_res.values[:] = res * 100
 
-    return da_res
+    da_res.attrs['units'] = '%'
 
+    return da_res
 
 
 def _flv(
@@ -229,8 +238,8 @@ def _flv(
             '`flv` not implemented for more than on dimension.'
         )
 
-    flv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, fraction=0.3, direction='low').compute()
-    flv = flv.where(mod.notnull().any(dim), np.nan)
+    flv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, fraction=0.05, direction='low').compute()
+    # flv = flv.where(mod.notnull().any(dim), np.nan)
 
     return flv
 
@@ -246,7 +255,7 @@ def _fhv(
         )
 
     fhv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, fraction=0.02, direction='high').compute()
-    fhv = fhv.where(mod.notnull().any(dim), np.nan)
+    # fhv = fhv.where(mod.notnull().any(dim), np.nan)
 
     return fhv
 
