@@ -361,7 +361,17 @@ def plot_xval_sets(xval_dir: str | PathLike) -> None:
 
         fig, ax = plt.subplots()
 
-        poly.plot(ec='k', lw=0.1, legend=False, color=poly['set'], ax=ax)
+        poly.plot(ec='k', lw=0.1, legend=False, color=poly['set'], alpha=0.8, ax=ax)
+        for _, s in enumerate([1, 2, 3]):
+            hru_subset = ds.hru.where((ds.subset.load() == s) & ds.has_obs.load(), drop=True).values
+            poly.loc[hru_subset].centroid.plot(
+                ec='k',
+                fc=list(color_mapping.values())[s],
+                lw=0.9,
+                markersize=10,
+                alpha=0.8,
+                ax=ax)
+
         despine(ax=ax, which='all', remove_ticks=True)
 
         # Create legend patches
