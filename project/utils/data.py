@@ -92,3 +92,37 @@ def enrich(
         hrus.loc[ds.hru.values, var] = ds[var].values
 
     return hrus
+
+
+def sel_subset(ds: xr.Dataset, subset: int | list[int], drop: bool = True) -> xr.Dataset:
+    """Select a subset of basins from the taining, validation, and/or test set.
+
+    Args:
+        ds (xr.Dataset): Input dataset.
+        subset (int | list[int]): Integer or list of integers corresponding to subsets:
+            - 0: no set
+            - 1: training set
+            - 2: validation set
+            - 3: test set
+        drop (bool, optional): Whether to drop other 'subsets'. Defaults to True.
+
+    Returns:
+        xr.Dataset: Subset of the input dataset.
+    """
+
+    if 'subset' not in ds:
+        raise ValueError("Input dataset must have a 'subset' dimension.")
+
+    if isinstance(subset, int):
+        subset = [subset]
+
+    s_outside = []
+    for s in subset:
+        if s not in [0, 1, 2, 3]:
+            s_outside.append(s)
+    if len(s_outside) > 0:
+        raise ValueError("`subset` must be 0, 1, 2, or 3. Found: " + str(s_outside))
+
+    mask = ds.subset.isin(subset).compute()
+
+    return ds.where(mask, drop=drop)
