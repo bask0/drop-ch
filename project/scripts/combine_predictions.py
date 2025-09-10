@@ -83,13 +83,10 @@ def get_encoding(ds: xr.Dataset) -> dict:
 
     for coord in ds.coords:
         encoding[coord] = {
-            'compressors': BloscCodec(
-                cname="zstd",
-                clevel=1,
-                shuffle=BloscShuffle.shuffle
-            ),
+            'compressors': None
         }
         ds[coord].encoding.pop('compressors', None)
+        ds[coord].load()
 
     return encoding
 
@@ -132,7 +129,7 @@ def complete_units(ds: xr.Dataset, base_ds: xr.Dataset) -> xr.Dataset:
 def main(pred_root: str, base_path: str, out_path: str) -> None:
     """Combine prediction results from different models and setups into a single dataset.
 
-    The structure is assumed to be root/model/setup/preds.zarr
+    The structure is assumed to be root/model/setup/xval/preds.zarr
 
     Args:
         pred_root (str): The root directory to search for preds.zarr files.
@@ -145,11 +142,21 @@ def main(pred_root: str, base_path: str, out_path: str) -> None:
 
     datasets = []
 
+    # Only load variables not present in base dataset.
     for k, v in data_layout.items():
         ds = xr.open_zarr(v)
         ds = complete_units(ds, base_ds)
         pred_vars = [var for var in ds.data_vars if var not in base_ds]
         ds = ds[pred_vars].expand_dims({'model': [k]})
+
+        # Handle conflicting dimensions: k should be present in all, x, y will be added back later with base_ds.
+        if 'k' not in ds.dims:
+            ds = ds.assign_coords(k=("k", np.array([])))
+        if 'x' in ds:
+            ds = ds.drop_vars('x')
+        if 'y' in ds:
+            ds = ds.drop_vars('y')
+
         datasets.append(ds)
 
     pred_datasets = xr.concat(datasets, dim='model')
