@@ -220,7 +220,7 @@ def _get_xflow_bias(
 
     res = (mod_mean - obs_mean) / (obs_mean + 1e-6)
 
-    da_res = obs_da.isel({dim: 0}).drop_vars(dim).copy().load()
+    da_res = mod_da.isel({dim: 0}).drop_vars(dim).copy().load()
     da_res.values[:] = res * 100
 
     da_res.attrs['units'] = '%'
