@@ -5,4 +5,4 @@ data:
 
 tuning_engine:
   exp_dir: experiments/routed/hard
-  log_dir: /cluster/home/kraftb/runs/routed/hard
+  log_dir: /cluster/work/climate/kraftb/runs/routed/hard
