@@ -19,7 +19,7 @@ from project.utils.metrics import compute_metrics
 # TODO: Make this more flexible, but tuning_engine does not have access to data paths.
 HRU_FILE_CANDIDATES = [
     Path('/net/argon/landclim/kraftb/machflow_routing/data/processed/hrus/hrus.gpkg'),
-    Path('/cluster/home/kraftb/data/machflow_routing/processed/hrus/hrus.gpkg')
+    Path('/cluster/work/climate/kraftb/data/machflow_routing/processed/hrus/hrus.gpkg')
 ]
 
 
