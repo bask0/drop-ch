@@ -173,6 +173,10 @@ class StreamflowNet(pl.LightningModule):
             use_pretrained=runoff_use_pretrained,
             max_q_chunk_size=max_q_chunk_size)
 
+        # For routed experiments, runoff is replaced with precipitation over lake surfaces.
+        # This is because PREVAH is not trusted for lake runoff.
+        self.runoff_net.use_precip_as_lake_runoff = True
+
         # ----- EvaporationNet ------
         #############################
 
