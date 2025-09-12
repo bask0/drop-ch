@@ -75,9 +75,8 @@ class StreamflowNet(pl.LightningModule):
             runoff_pct_start: float = 0.03,
             evaporation_enabled: bool = False,
             evaporation_lr: float = 0.01,
-            routing_dynamic_modulation: bool = False,
             routing_hidden_size: int = 16,
-            routing_time_substeps: int = 1,
+            routing_time_substeps: int = 0,
             routing_lr: float = 0.001,
             routing_weight_decay: float = 0.0,
             routing_pct_start: float = 0.03,
@@ -113,12 +112,12 @@ class StreamflowNet(pl.LightningModule):
                 Default is False.
             evaporation_lr (float, optional): Learning rate for the evaporation network optimizer.
                 Default is 0.01.
-            routing_dynamic_modulation (bool, optional): If True, enables dynamic modulation in the routing network.
-                Default is False.
             routing_hidden_size (int, optional): Hidden size for the routing network.
                 Default is 16.
-            routing_time_substeps (int, optional): Number of time substeps for the routing network.
-                Default is 1 (no substepping).
+            routing_time_substeps (int, optional): Number of time substeps for the routing network. If 0, no
+                substepping is used, and dynamic modulation (state impacts routing) is turned off. If 1, no
+                substepping is used, but dynamic modulation is on. If >1, substepping is used with the specified
+                number and dynamic modulation is enabled. Default is 0 (no substepping and no dynamic modulation).
             routing_lr (float, optional): Learning rate for the routing network optimizer.
                 Default is 0.001.
             routing_weight_decay (float, optional): Weight decay for the routing network optimizer.
@@ -187,6 +186,12 @@ class StreamflowNet(pl.LightningModule):
 
         if num_stat_routing_features is None:
             raise ValueError('`num_stat_routing_features` must be provided.')
+
+        if routing_time_substeps == 0:
+            routing_dynamic_modulation = False
+            routing_time_substeps = 1
+        else:
+            routing_dynamic_modulation = True
 
         self.routing_net = RoutingModel(
             num_inputs=num_stat_routing_features,
@@ -777,9 +782,9 @@ class StreamflowNet(pl.LightningModule):
                     hits.append(path)
 
         if len(hits) == 0:
-            raise FileNotFoundError(f'No \'**/tune/optuna.db\' files found in {experiment_dir}.')
+            raise FileNotFoundError(f'No \'**/tune/optuna.db\' files found in \'{experiment_dir}\'.')
         elif len(hits) > 1:
-            raise ValueError(f'Multiple \'**/tune/optuna.db\' files found in {experiment_dir}, please specify '
+            raise ValueError(f'Multiple \'**/tune/optuna.db\' files found in \'{experiment_dir}\', please specify '
                              f'a directory with only one such file. Hits were:')
 
         # The optuna.db file should be unique in the tune subdirectory, e.g., /path/tune/optuna.db
