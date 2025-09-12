@@ -160,16 +160,19 @@ class RoutingModel(torch.nn.Module):
         device = q.device
         dtype = q.dtype
 
+        # Initialize storage tensors.
         St = torch.zeros_like(batch.y[:, 0, :])
         Q_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, enc_size, device=device, dtype=dtype)
         S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, enc_size, device=device, dtype=dtype)
 
+        # Initialize diagnostic storage if requested.
         if return_diagnostics:
             r_size = len(subset) if subset is not None else batch_size
             R_store = torch.ones(r_size, seq_length * self.num_time_subseteps, device=device, dtype=dtype)
         else:
             R_store = torch.ones(1)
 
+        # Spatial encoding, static in time.
         if is_boundary:
             q[subset] = 0.0
             e[subset] = 0.0
@@ -177,8 +180,10 @@ class RoutingModel(torch.nn.Module):
         else:
             x_enc, downstream_aligner = self.tnet.spatial_encode(batch=batch, subset=subset)
 
+        # Initial retention value.
         retention_prev = torch.zeros(x_enc.shape[0], device=device, dtype=dtype) + 0.1
 
+        # Transport matrices, static in time if not dynamic modulation.
         if not self.dynamic_modulation:
             T, D, k, x_retention = self.tnet(
                 x_enc=x_enc,
@@ -187,20 +192,24 @@ class RoutingModel(torch.nn.Module):
         # Iterate time dimension.
         for t in range(0, seq_length):
 
+            # Scale inputs by number of sub-steps to conserve mass.
             qt = q[:, t, :] / self.num_time_subseteps
             et = e[:, t, :] / self.num_time_subseteps
 
+            # Iterate sub-time dimension.
             for t_sub in range(self.num_time_subseteps):
 
+                # Select state subset if specified.
                 if is_update_with_subset:
-                    # Perform state update and streamflow prediction.
                     St_s = St[subset]
+                # Full state update.
                 else:
-                    # Perform state update and streamflow prediction.
                     St_s = St
 
+                # Update state with inputs, cut at zero to avoid negative storage.
                 S_plus_q_t = torch.relu(St_s + qt - et)
 
+                # Dynamic transport matrices if enabled.
                 if self.dynamic_modulation:
                     T, D, k, x_retention = self.tnet(
                         x_enc=x_enc,
@@ -208,11 +217,14 @@ class RoutingModel(torch.nn.Module):
                         d=St_s.detach(),
                         retention_prev=retention_prev.detach())
 
+                # Compute inner time index.
                 inner_t = t * self.num_time_subseteps + t_sub
 
+                # Transport state and compute streamflow.
                 St = T @ S_plus_q_t
                 Qt = D @ S_plus_q_t
 
+                # Store results.
                 S_store[:, inner_t, :] = St
                 Q_store[:, inner_t, :] = Qt
 
@@ -220,6 +232,7 @@ class RoutingModel(torch.nn.Module):
                 if return_diagnostics:
                     R_store[:, inner_t] = x_retention
 
+        # Remove subtime dimension by averaging state and summing flow.
         S_store = S_store.view(batch_size, -1, self.num_time_subseteps, enc_size).mean(dim=2)
         Q_store = Q_store.view(batch_size, -1, self.num_time_subseteps, enc_size).sum(dim=2)
         if return_diagnostics:
