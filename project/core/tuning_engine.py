@@ -167,15 +167,14 @@ class TuningEngine:
         self.xval_db = self.xval_dir / "optuna.db"
 
     @property
-    def best_config_path(self) -> Path:
-        """
-        Path to the best configuration file from tuning.
+    def best_trial_dir(self) -> Path:
+        """Path to the best trial directory form tuning.
 
         Returns:
-            Path: The path to the best configuration file.
+            Path: The path to the best tuning directory.
 
         Raises:
-            RuntimeError: If the tuning study cannot be loaded or does not contain the best trial.
+            RuntimeError: If the tuning study cannot be loaded or if the inferred path does not exist.
         """
 
         try:
@@ -187,18 +186,51 @@ class TuningEngine:
         except Exception as e:
             raise RuntimeError("Cannot load tuning study.") from e
 
-        try:
-            log_dir = study.best_trial.user_attrs['log_dir']
+        best_trial_version = self._get_trial_version_string(study.best_trial.number, is_tune=True)
+        best_trial_dir = self.tune_dir / best_trial_version
 
-        except KeyError as e:
-            raise RuntimeError("Best trial does not have 'log_dir' attribute.") from e
+        if not best_trial_dir.exists():
+            raise RuntimeError(f"Best trial directory does not exist: {best_trial_dir}.")
 
-        best_config_path = Path(log_dir) / "config.yaml"
+        return best_trial_dir
+
+    @property
+    def best_config_path(self) -> Path:
+        """
+        Path to the best configuration file from tuning.
+
+        Returns:
+            Path: The path to the best configuration file.
+
+        Raises:
+            RuntimeError: If the tuning study cannot be loaded or if the configuration file does not exist.
+        """
+
+        best_config_path = self.best_trial_dir / 'config.yaml'
 
         if not best_config_path.exists():
-            raise RuntimeError(f"Best config file does not exist: {best_config_path}")
+            raise RuntimeError(f"Best trial configuration does not exist: {best_config_path}.")
 
         return best_config_path
+
+    @property
+    def best_checkpoint_path(self) -> Path:
+        """
+        Path to the best model checkpoint from tuning.
+
+        Returns:
+            Path: The path to the best model checkpoint.
+
+        Raises:
+            RuntimeError: If the tuning study cannot be loaded or if the checkpoint file does not exist.
+        """
+
+        best_checkpoint_path = self.best_trial_dir / 'checkpoints' / 'best.ckpt'
+
+        if not best_checkpoint_path.exists():
+            raise RuntimeError(f"Best trial checkpoint does not exist: {best_checkpoint_path}.")
+
+        return best_checkpoint_path
 
     def setup(self, which: Literal["all", "tune", "xval"]) -> None:
         """
@@ -265,7 +297,7 @@ class TuningEngine:
                 self._create_dirs_if_needed(self.xval_dir, remove=True)
                 self._init_optuna_study(self.xval_db)
 
-        self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite or self.resume)
+        # self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite or self.resume)
 
     def tune(self) -> optuna.Study:
         """
@@ -375,6 +407,12 @@ class TuningEngine:
             func=lambda trial: self.objective(trial, is_tune, use_best_tuning_checkpoint),
             n_trials=self.n_trials if is_tune else self.num_folds,
         )
+
+        logger.info(
+            f"Finished {'tuning' if is_tune else 'cross-validation'} with {len(study.trials)} "
+            f"{'trials' if is_tune else 'folds'}."
+        )
+
         return study
 
     def _add_user_attrs(self, study: 'Study') -> None:
@@ -425,7 +463,7 @@ class TuningEngine:
         """
 
         # Set experiment directory and version for uniqueness
-        version = f"trial_{trial.number:03d}" if is_tune else f"fold_{trial.number:03d}"
+        version = self._get_trial_version_string(trial.number, is_tune)
 
         if is_tune:
             sample_args = self.sample_parameters(trial=trial)
@@ -488,7 +526,7 @@ class TuningEngine:
                 study_name=self.EXPERIMENT_NAME,
                 storage=self._get_storage(db_path=self.tune_db),
             )
-            best_checkpoint = study.best_trial.user_attrs['best_checkpoint']
+            best_checkpoint = self.best_checkpoint_path
             val_loss = study.best_value
 
         try:
@@ -496,12 +534,14 @@ class TuningEngine:
         except AttributeError:
             raise AttributeError("No logger found; cannot retrieve log directory.")
 
-        trial.set_user_attr("best_checkpoint", best_checkpoint)
+        trial.set_user_attr("best_checkpoint", str(best_checkpoint))
         trial.set_user_attr("log_dir", log_dir)
         trial.set_user_attr("epoch", cli.trainer.current_epoch)
 
         if not is_tune:
-            model = type(cli.model).load_from_checkpoint(best_checkpoint)
+            model = type(cli.model).load_from_checkpoint(
+                best_checkpoint,
+                runoff_net_exp_dir='/cluster/work/climate/kraftb/runs/pretraining/')  # TODO: delete
             cli.trainer.predict(model=model, datamodule=cli.datamodule)
 
         return val_loss
@@ -819,3 +859,17 @@ class TuningEngine:
 
         print(f"Console output → {log_file}")
         return log_file
+
+    def _get_trial_version_string(self, trial_number: int, is_tune: bool) -> str:
+        """
+        Generate a version string for the given trial number and mode.
+
+        Args:
+            trial_number (int): The trial number.
+            is_tune (bool): If True, indicates tuning mode; if False, indicates cross-validation mode.
+
+        Returns:
+            str: The generated version string.
+        """
+
+        return f"trial_{trial_number:03d}" if is_tune else f"fold_{trial_number:03d}"
