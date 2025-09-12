@@ -123,6 +123,11 @@ def complete_units(ds: xr.Dataset, base_ds: xr.Dataset) -> xr.Dataset:
                 area = base_ds['area']
             ds[var] = convert_func(ds[base_var], area)  # Assuming area in km2
 
+            if to_var == '_m3s':
+                ds[var].attrs['units'] = 'm³/s'
+            else:
+                ds[var].attrs['units'] = 'mm/day'
+
     return ds
 
 
