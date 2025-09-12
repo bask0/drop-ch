@@ -663,8 +663,8 @@ class QLoss(torch.nn.Module):
         loss = reg_loss + water_freq_loss * weight * 40
 
         log_loss = {
-            'loss': loss,
-            'reg_loss': reg_loss,
+            'total_loss': loss,
+            'loss': reg_loss,
             'water_freq_loss': water_freq_loss,
             'water_freq_loss_weight': weight
         }
