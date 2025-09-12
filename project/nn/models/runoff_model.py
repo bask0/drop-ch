@@ -73,6 +73,35 @@ class RunoffModel(torch.nn.Module):
             enc_dropout=enc_dropout
         )
 
+    def _model_forward(self, batch: HRUSample, subset: Tensor | None, sample_slice: slice | None = None) -> Tensor:
+        """Pass forward through the LSTM model without output transformations.
+
+        Args:
+            batch (BaHRUSampletch): Graph batch containing input tensors.
+            subset (Tensor | None): Optional tensor specifying a subset of nodes to process.
+            sample_slice (slice | None): Optional slice to further subset the input samples.
+
+        Returns:
+            Tensor: Raw model output of shape [N, T, 1] where N is the number of nodes and
+                T is the number of output time steps.
+        """
+
+        x = batch.x
+        d = batch.d
+
+        if subset is not None:
+            x = x[subset]
+            d = d[subset]
+
+        if sample_slice is not None:
+            x = x[sample_slice]
+            d = d[sample_slice]
+
+        x = self.norm.norm_stat_features(x)
+        d = self.norm.norm_dyn_features(d)
+
+        return self.lstm(d, x)
+
     def forward(
             self,
             batch: HRUSample,
@@ -92,21 +121,9 @@ class RunoffModel(torch.nn.Module):
             Tensor: Model output of shape [N, T, 1] where N is the number of nodes and
                 T is the number of output time steps.
         """
-        x = batch.x
-        d = batch.d
 
-        if subset is not None:
-            x = x[subset]
-            d = d[subset]
+        out = self._model_forward(batch=batch, subset=subset, sample_slice=sample_slice)
 
-        if sample_slice is not None:
-            x = x[sample_slice]
-            d = d[sample_slice]
-
-        x = self.norm.norm_stat_features(x)
-        d = self.norm.norm_dyn_features(d)
-
-        out = self.lstm(d, x)
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
     @torch.no_grad()
@@ -146,14 +163,13 @@ class RunoffModel(torch.nn.Module):
         for i in range(num_iter):
             start_sample = i * self.max_q_chunk_size
             end_sample = (i + 1) * self.max_q_chunk_size
-            out[start_sample:end_sample] = self(
+            out[start_sample:end_sample] = self._model_forward(
                 batch=batch,
                 subset=subset,
-                scale_output=scale_output,
                 sample_slice=slice(start_sample, end_sample)
             )
 
-        return out
+        return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
     def transform_output(self, batch: HRUSample, q: Tensor, scale_output: bool, subset: Tensor | None) -> Tensor:
         """
@@ -190,7 +206,7 @@ class RunoffModel(torch.nn.Module):
         # --- Optional replacement: use precipitation as lake runoff ---
         if self.use_precip_as_lake_runoff:
             # Convert precipitation from mm/day to m³/s if model output is not in mm/day
-            prec = convert_mmd_to_m3s(prec, hru_area[:, None, None])
+            # prec = convert_mmd_to_m3s(prec, hru_area[:, None, None])
 
             prec = self.norm.norm_targets(prec)  # No-op if normalization is disabled.
 
