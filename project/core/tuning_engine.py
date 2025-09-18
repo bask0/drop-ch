@@ -394,7 +394,10 @@ class TuningEngine:
             callbacks = [
                 optuna.study.MaxTrialsCallback(
                     n_trials=self.n_trials,
-                    states=(optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.PRUNED),
+                    states=(
+                        optuna.trial.TrialState.COMPLETE,
+                        optuna.trial.TrialState.PRUNED,
+                        optuna.trial.TrialState.RUNNING),
                 ),
             ]
         else:
