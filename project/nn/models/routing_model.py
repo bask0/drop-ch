@@ -156,19 +156,19 @@ class RoutingModel(torch.nn.Module):
 
         is_update_with_subset = (not is_boundary) & (subset is not None)
 
-        batch_size, seq_length, enc_size = batch.y.shape
+        batch_size, seq_length, _ = batch.y.shape
         device = q.device
         dtype = q.dtype
 
         # Initialize storage tensors.
         St = torch.zeros_like(batch.y[:, 0, :])
-        Q_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, enc_size, device=device, dtype=dtype)
-        S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, enc_size, device=device, dtype=dtype)
+        Q_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
+        S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
 
         # Initialize diagnostic storage if requested.
         if return_diagnostics:
             r_size = len(subset) if subset is not None else batch_size
-            R_store = torch.ones(r_size, seq_length * self.num_time_subseteps, device=device, dtype=dtype)
+            R_store = torch.ones(r_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
         else:
             R_store = torch.ones(1)
 
@@ -230,13 +230,13 @@ class RoutingModel(torch.nn.Module):
 
                 retention_prev = x_retention
                 if return_diagnostics:
-                    R_store[:, inner_t] = x_retention
+                    R_store[:, inner_t, 0] = x_retention
 
         # Remove subtime dimension by averaging state and summing flow.
-        S_store = S_store.view(batch_size, -1, self.num_time_subseteps, enc_size).mean(dim=2)
-        Q_store = Q_store.view(batch_size, -1, self.num_time_subseteps, enc_size).sum(dim=2)
+        S_store = S_store.view(batch_size, -1, self.num_time_subseteps, 1).mean(dim=2)
+        Q_store = Q_store.view(batch_size, -1, self.num_time_subseteps, 1).sum(dim=2)
         if return_diagnostics:
-            R_store = R_store.view(batch_size, -1, self.num_time_subseteps)
+            R_store = R_store.view(batch_size, -1, self.num_time_subseteps, 1).mean(dim=2)
 
         return Q_store, S_store, R_store, T, D, k, x_retention
 
