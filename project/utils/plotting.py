@@ -5,12 +5,14 @@ from os import PathLike
 from pathlib import Path
 import shutil
 import warnings
+import cartopy.crs as ccrs
 import geopandas as gpd
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
+from pyproj import CRS
 import xarray as xr
 
 from project.utils.data import load_xval_test_set
@@ -387,3 +389,35 @@ def plot_xval_sets(xval_dir: str | PathLike) -> None:
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
 
         plt.close(fig)
+
+
+class ProjectCustomExtent(ccrs.Projection):
+    """Projections with custom (optionally beyond limits) extents."""
+
+    def __init__(self, epsg, extent):
+        """Initialize a custom projection with a specified extent."""
+
+        self.xmin, self.xmax, self.ymin, self.ymax = extent
+        super().__init__(CRS.from_epsg(epsg).to_string())
+
+    @ccrs.Projection.boundary.getter
+    def boundary(self):
+        """Define the boundary of the projection based on the custom extent."""
+
+        coords = ((self.x_limits[0], self.y_limits[0]),
+                  (self.x_limits[0], self.y_limits[1]),
+                  (self.x_limits[1], self.y_limits[1]),
+                  (self.x_limits[1], self.y_limits[0]))
+        return ccrs.sgeom.LineString(coords)
+
+    @ccrs.Projection.x_limits.getter
+    def x_limits(self):
+        """Get the x-axis limits of the projection."""
+
+        return self.xmin, self.xmax
+
+    @ccrs.Projection.y_limits.getter
+    def y_limits(self):
+        """Get the y-axis limits of the projection."""
+
+        return self.ymin, self.ymax
