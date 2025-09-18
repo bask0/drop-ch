@@ -391,10 +391,17 @@ class TuningEngine:
             sampler = self.sampler
             pruner = self.pruner
             db_path = self.tune_db
+            callbacks = [
+                optuna.study.MaxTrialsCallback(
+                    n_trials=self.n_trials,
+                    states=(optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.PRUNED),
+                ),
+            ]
         else:
             sampler = optuna.samplers.BruteForceSampler()
             pruner = optuna.pruners.NopPruner()
             db_path = self.xval_db
+            callbacks = None
 
         study = optuna.load_study(
             study_name=self.EXPERIMENT_NAME,
@@ -406,6 +413,7 @@ class TuningEngine:
         study.optimize(
             func=lambda trial: self.objective(trial, is_tune, use_best_tuning_checkpoint),
             n_trials=self.n_trials if is_tune else self.num_folds,
+            callbacks=callbacks,
         )
 
         logger.info(
@@ -414,25 +422,6 @@ class TuningEngine:
         )
 
         return study
-
-    def _add_user_attrs(self, study: 'Study') -> None:
-        """
-        Add user attributes to the Optuna study.
-
-        Args:
-            study (Study): The Optuna trial object to which attributes will be added.
-            **kwargs: Key-value pairs of attributes to add to the trial.
-        """
-        def to_plain(v):
-            return str(v) if isinstance(v, Path) else v
-
-        names = [
-            'exp_dir', 'log_dir', 'num_folds', 'monitor',
-            'tune_dir', 'tune_db', 'xval_dir', 'xval_db'
-        ]
-
-        for name in names:
-            study.set_user_attr(key=name, value=to_plain(getattr(self, name)))
 
     def objective(self, trial: 'Trial', is_tune: bool, use_best_tuning_checkpoint: bool = False) -> float:
         """
@@ -641,6 +630,25 @@ class TuningEngine:
 
         val = trial.suggest_int("fold_idx", 0, self.num_folds - 1)
         return [f'--data.init_args.fold_idx={val}']
+
+    def _add_user_attrs(self, study: 'Study') -> None:
+        """
+        Add user attributes to the Optuna study.
+
+        Args:
+            study (Study): The Optuna trial object to which attributes will be added.
+            **kwargs: Key-value pairs of attributes to add to the trial.
+        """
+        def to_plain(v):
+            return str(v) if isinstance(v, Path) else v
+
+        names = [
+            'exp_dir', 'log_dir', 'num_folds', 'monitor',
+            'tune_dir', 'tune_db', 'xval_dir', 'xval_db'
+        ]
+
+        for name in names:
+            study.set_user_attr(key=name, value=to_plain(getattr(self, name)))
 
     @staticmethod
     def _get_cli_config_and_args() -> tuple[list[str], list[str]]:
