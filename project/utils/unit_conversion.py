@@ -106,7 +106,8 @@ def convert_xr_mmd_to_m3s(ds: xr.Dataset, variables: list[str], area_var: str = 
 
     Returns:
         xr.Dataset: The dataset with new variables added for each input variable, named '<variable>_m3s'
-            containing the converted values in m³/s.
+            containing the converted values in m³/s. Note that if the input variable already ends with '_mmd',
+            the new variable will replace ''_mmd' with '_m3s'.
 
     Notes:
         - Assumes the area variable is in square kilometers (km²).
@@ -115,7 +116,11 @@ def convert_xr_mmd_to_m3s(ds: xr.Dataset, variables: list[str], area_var: str = 
 
     for variable in variables:
         # Note that area is in km2.
-        ds[variable + '_m3s'] = convert_mmd_to_m3s(x=ds[variable], area=ds[area_var])
+        if variable.endswith('_mmd'):
+            new_variable = variable.replace('_mmd', '_m3s')
+        else:
+            new_variable = variable + '_m3s'
+        ds[new_variable] = convert_mmd_to_m3s(x=ds[variable], area=ds[area_var])
 
     return ds
 
@@ -131,8 +136,9 @@ def convert_xr_m3s_to_mmd(ds: xr.Dataset, variables: list[str], area_var: str = 
         kilometers (default is 'area').
 
     Returns:
-        xr.Dataset: The dataset with new variables added for each input variable, named '<variable>_m3s'
-            containing the converted values in m³/s.
+        xr.Dataset: The dataset with new variables added for each input variable, named '<variable>_mmd'
+            containing the converted values in m³/s. Note that if the input variable already ends with '_m3s',
+            the new variable will replace '_m3s' with '_mmd'.
 
     Notes:
         - Assumes the area variable is in square kilometers (km²).
@@ -141,6 +147,10 @@ def convert_xr_m3s_to_mmd(ds: xr.Dataset, variables: list[str], area_var: str = 
 
     for variable in variables:
         # Note that area is in km2.
-        ds[variable + '_mmd'] = convert_m3s_to_mmd(x=ds[variable], area=ds[area_var])
+        if variable.endswith('_m3s'):
+            new_variable = variable.replace('_m3s', '_mmd')
+        else:
+            new_variable = variable + '_mmd'
+        ds[new_variable] = convert_m3s_to_mmd(x=ds[variable], area=ds[area_var])
 
     return ds
