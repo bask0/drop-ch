@@ -368,37 +368,49 @@ class StreamflowNet(pl.LightningModule):
 
         return Q, retention
 
-    def routing_forward(self, batch, subset) -> tuple[Tensor, Tensor]:
-        """Compute the streamflow for a specified subset of nodes, incorporating boundary conditions and transport.
+    def routing_forward(self, batch) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Compute the streamflow with grads only on routing.
 
         Args:
             batch: Input batch containing data required for streamflow computation.
-            subset: Indices or mask specifying the subset of nodes for which routing is performed.
 
         Returns:
-            tuple[Tensor, Tensor]:
+            tuple[Tensor, Tensor, Tensor, Tensor]:
                 - Q: Tensor representing the combined streamflow for all nodes, with contributions from
                     both boundary conditions and routed subset nodes.
+                - q: Tensor representing the runoff values for all nodes, converted to m³/s.
+                - e: Tensor representing the evaporation values for all nodes, converted to m³/s.
                 - retention: Tensor representing the retention values computed during routing for
                     the subset nodes.
         """
         # Compute streamflow for a given subset of S nodes, keep gradients for routing, runoff is boundary condition.
 
-        # q_boundary is runoff for all nodes, it has shape N x T x 1.
+        # q is runoff for all nodes, it has shape N x T x 1.
+        # e is evaporation for all nodes, it has shape N x T x 1.
         # Q_boundary is streamflow, excluding transport from subset nodes, it has shape N x T x 1.
-        q_boundary, e_boundary, Q_boundary = self.boundary_forward(batch=batch, subset=subset)
+        with torch.no_grad():
+            q = self.runoff_net.chunked_forward(
+                batch=batch,
+                scale_output=True,
+                subset=None)
+            q = self.convert_q_to_m3s(q, batch)
+            e = self.evaporation_net(
+                T=batch.tair,
+                area=batch.hru_area,
+                water_freq=batch.water_freq,
+                subset=None)
+
+        q.requires_grad_(True)
+        e.requires_grad_(True)
 
         # Q_grads is the streamflow transported from the subset to all nodes, it has shape N x T x 1.
         Q_grads, *_, retention = self.routing_net.route(
             batch=batch,
-            q=q_boundary[subset],
-            e=e_boundary[subset],
-            subset=subset)
+            q=q,
+            e=e,
+            subset=None)
 
-        # The combined streamflow, boundary conditions plus subset nodes.
-        Q = Q_boundary + Q_grads
-
-        return Q, retention
+        return Q_grads, q, e, retention
 
     def training_step(self, batch, batch_idx) -> Tensor:
         """Perform a single training step for the model.
