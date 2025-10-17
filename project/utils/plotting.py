@@ -4,11 +4,13 @@ import os
 from os import PathLike
 from pathlib import Path
 import shutil
+from typing import Literal
 import warnings
 import cartopy.crs as ccrs
 import geopandas as gpd
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
+import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
@@ -50,6 +52,53 @@ def despine(ax: Axes, which: str = 'L', remove_ticks: bool = False) -> None:
 
     if remove_ticks:
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+
+
+def cbar_halo(
+        ax: Axes,
+        which: Literal['x', 'y'],
+        linewidth: float = 5,
+        color: str = 'w',
+        labelsize: int = 8,
+        ticksize: int = 6,
+        flip_label: bool = True,
+        **kwargs) -> None:
+    """Add a halo effect to the colorbar axis labels and tick labels.
+
+    Args:
+        ax (Axes): The axes containing the colorbar.
+        which (Literal['x', 'y']): Which axis to apply the halo effect to ('x' or 'y').
+        linewidth (float): The linewidth of the halo effect. Defaults to 5.
+        color (str): The color of the halo effect. Defaults to 'white'.
+        labelsize (int): Font size for the axis label. Defaults to 8.
+        ticksize (int): Font size for the tick labels. Defaults to 6.
+        flip_label (bool): If True and `which` is 'y', flip the label
+        **kwargs: Additional keyword arguments to pass to the path effect.
+
+    """
+
+    halo = [path_effects.withStroke(linewidth=linewidth, foreground=color, **kwargs)]
+
+    if which == 'x':
+        axis = ax.xaxis
+        ticklabels = ax.get_xticklabels()
+    elif which == 'y':
+        axis = ax.yaxis
+        ticklabels = ax.get_yticklabels()
+    else:
+        raise ValueError(f'`which` must be "x" or "y", got {which}.')
+
+    ax.tick_params(axis=which, labelsize=ticksize)
+
+    axis.label.set_size(labelsize)
+
+    if flip_label:
+        axis.set_label_position('top' if which == 'x' else 'left')
+
+    axis.label.set_path_effects(halo)
+
+    for t in ticklabels:
+        t.set_path_effects(halo)
 
 
 OPTUNA_PLOTS_TUNING = [
