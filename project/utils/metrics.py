@@ -64,6 +64,18 @@ def _absbias(
     return absbias.compute()
 
 
+def _relscale(
+        obs: xr.DataArray,
+        mod: xr.DataArray,
+        dim: Dims) -> xr.DataArray:
+
+    relscale = (mod.std(dim=dim, skipna=True) - obs.std(dim=dim, skipna=True)) / obs.std(dim=dim, skipna=True) * 100
+
+    relscale.attrs['units'] = '%'
+
+    return relscale.compute()
+
+
 def _mse(
         obs: xr.DataArray,
         mod: xr.DataArray,
@@ -161,67 +173,53 @@ def _kge(
     return (1 - value ** 0.5).compute()
 
 
-def _get_sorted_fraction(x, fraction, direction):
-    """Get a fraction of the smallest or largest values along the last axis.
-
-    Note: Instead of cutting the fraction, we fill in NaNs to dead with different number of values.
-
-    Args:
-        x: a numpy array
-        fraction: the fraction of lowest (if `direction='low'`) or highest (if `direction='high'`) values to extract.
-        direction: 'low' for lowest or 'high' for largest values.
-
-    Returns:
-        A numpy Array with lowest or largest values up to given fraction, filled with NaN where above threshold.
-    """
-
-    if not (0 <= fraction <= 1):
-        raise ValueError(
-            f'fraction must be in range [0, 1], is {fraction}.'
-        )
-
-    for idx in np.ndindex(x.shape[:-1]):
-
-        if direction == 'high':
-            x_sorted = -np.sort(-x[idx])
-        elif direction == 'low':
-            x_sorted = np.sort(x[idx])
-        else:
-            raise ValueError(
-                f'direcion mus be \'low\' or \'high\', is \'{direction}\'.'
-            )
-
-        num_valid = np.isfinite(x_sorted).sum()
-        num_cut = np.round(fraction * num_valid).astype(int)
-        x_sorted[num_cut:] = np.nan
-
-        x[idx] = x_sorted
-
-    return x
-
-
 def _get_xflow_bias(
         obs: xr.DataArray,
         mod: xr.DataArray,
         dim: str,
-        fraction: float,
-        direction: str) -> xr.DataArray:
+        q_low: float,
+        q_up: float) -> xr.DataArray:
 
-    obs = obs.transpose(..., dim)
-    mod = mod.transpose(..., dim)
+    if not (0 <= q_low <= 1):
+        raise ValueError(
+            f'`q_low` must be in range [0, 1], is {q_low}.'
+        )
+    if not (0 <= q_up <= 1):
+        raise ValueError(
+            f'`q_up` must be in range [0, 1], is {q_up}.'
+        )
+    if q_up <= q_low:
+        raise ValueError(
+            f'`q_up` must be larger than `q_low`, is {q_up} <= {q_low}.'
+        )
 
-    obs_da, mod_da = common_mask(obs=obs, mod=mod, dim=dim)
+    only_mod_dims = tuple(np.setdiff1d(np.array(mod.dims), np.array(obs.dims)))
+    n_only_mod_dims = len(only_mod_dims)
 
-    obs_s = _get_sorted_fraction(x=obs_da.values, fraction=fraction, direction=direction)
-    mod_s = _get_sorted_fraction(x=mod_da.values, fraction=fraction, direction=direction)
+    obs_da = obs.transpose(..., dim)
+    mod_da = mod.transpose(*only_mod_dims, ..., dim)
 
-    obs_mean = np.nanmean(obs_s, axis=-1)
-    mod_mean = np.nanmean(mod_s, axis=-1)
+    da_res = mod_da.isel({dim: 0}).copy()
 
-    res = (mod_mean - obs_mean) / (obs_mean + 1e-6)
+    for idx in np.ndindex(mod_da.shape[:-1]):
 
-    da_res = mod_da.isel({dim: 0}).drop_vars(dim).copy().load()
-    da_res.values[:] = res * 100
+        mod_i = mod_da[idx].values
+
+        obs_i = obs_da[idx[n_only_mod_dims:]].values
+
+        sort_idx = np.argsort(obs_i)
+
+        n = np.isfinite(obs_i).sum()
+        low_i = int(np.floor(q_low * n))
+        up_i = int(np.floor(q_up * n))
+        sort_idx_in_range = sort_idx[low_i:up_i]
+
+        obs_in_range = obs_i[sort_idx_in_range]
+        mod_in_range = mod_i[sort_idx_in_range]
+
+        perc_bias = 100 * (mod_in_range - obs_in_range).sum() / obs_in_range.sum()
+
+        da_res[idx] = perc_bias
 
     da_res.attrs['units'] = '%'
 
@@ -238,8 +236,7 @@ def _flv(
             '`flv` not implemented for more than on dimension.'
         )
 
-    flv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, fraction=0.05, direction='low').compute()
-    # flv = flv.where(mod.notnull().any(dim), np.nan)
+    flv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, q_low=0.0, q_up=0.05).compute()
 
     return flv
 
@@ -254,8 +251,7 @@ def _fhv(
             '`fhv` not implemented for more than on dimension.'
         )
 
-    fhv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, fraction=0.02, direction='high').compute()
-    # fhv = fhv.where(mod.notnull().any(dim), np.nan)
+    fhv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, q_low=0.98, q_up=1.00).compute()
 
     return fhv
 
@@ -264,17 +260,18 @@ METRIC_MAPPING: dict[str, dict] = dict(
     bias={'func': _bias, 'name': 'Bias', 'direction': 'none'},
     absbias={'func': _absbias, 'name': 'Absolute bias', 'direction': 'min'},
     relbias={'func': _relbias, 'name': '%Bias', 'direction': 'none'},
-    mse={'func': _mse, 'name': 'Mean squared error', 'direction': 'min'},
+    relscale={'func': _relscale, 'name': '%Scale Bias', 'direction': 'none'},
+    mse={'func': _mse, 'name': 'Mean squared error (MSE)', 'direction': 'min'},
     bias2={'func': _bias2, 'name': 'Squared bias', 'direction': 'min'},
     varerr={'func': _varerr, 'name': 'Variance error', 'direction': 'min'},
     phaseerr={'func': _phaseerr, 'name': 'Phase error', 'direction': 'min'},
-    rmse={'func': _rmse, 'name': 'Root mean squared error', 'direction': 'min'},
-    nse={'func': _nse, 'name': 'Modeling efficiency', 'direction': 'max'},
-    nnse={'func': _nnse, 'name': 'Normalized modeling efficiency', 'direction': 'max'},
-    kge={'func': _kge, 'name': 'Kling-Gupta efficiency', 'direction': 'max'},
-    r={'func': _r, 'name': 'Pearson\'s correlation', 'direction': 'max'},
-    flv={'func': _flv, 'name': '%Bias FLV', 'direction': 'none'},
-    fhv={'func': _fhv, 'name': '%Bias FHV', 'direction': 'none'},
+    rmse={'func': _rmse, 'name': 'Root mean squared error (RMSE)', 'direction': 'min'},
+    nse={'func': _nse, 'name': 'Modeling efficiency (NSE)', 'direction': 'max'},
+    nnse={'func': _nnse, 'name': 'Normalized modeling efficiency (NNSE)', 'direction': 'max'},
+    kge={'func': _kge, 'name': 'Kling-Gupta efficiency (KGE)', 'direction': 'max'},
+    r={'func': _r, 'name': 'Pearson\'s correlation (r)', 'direction': 'max'},
+    flv={'func': _flv, 'name': '%Bias$_\mathrm{lowflow}$ (<Q.5)', 'direction': 'none'},
+    fhv={'func': _fhv, 'name': '%Bias$_\mathrm{highflow}$ (>Q.98)', 'direction': 'none'},
 )
 
 
