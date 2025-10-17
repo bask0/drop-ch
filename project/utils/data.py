@@ -142,6 +142,7 @@ def load_hillshade(
         use_terrain: bool = False,
         use_slope_for_lake_mask: bool = True,
         lake_rgb: tuple[int, int, int] | None = None,
+        target_crs: str = 'EPSG:2056',
         force_recompute: bool = False) -> xr.Dataset:
     """Load or compute hillshade from MERIT DEM.
 
@@ -153,6 +154,7 @@ def load_hillshade(
         use_slope_for_lake_mask: If True, use slope from DEM to identify lakes.
         lake_rgb: RGB color for lakes (0-255). if None, default blue (174, 216, 229) is used. Passing forces
             recompute.
+        target_crs: Target coordinate reference system for hillshade.
         force_recompute: If True, recompute hillshade even if it exists.
 
     Returns:
@@ -177,6 +179,11 @@ def load_hillshade(
         return xr.open_zarr(hillshade_path).hs
 
     dem = xr.open_dataset('/net/argon/landclim_nobackup/kraftb/data/merit/merit.zarr').rio.write_crs('EPSG:4326')
+
+    dem.rio.set_spatial_dims(x_dim='lon', y_dim='lat', inplace=True)
+
+    dem = dem.rio.reproject(target_crs, resolution=90)
+    dem = dem.rename({'x': 'lon', 'y': 'lat'})
 
     alt_deg = 45.0  # sun altitude (elevation)
     az_deg = 315.0  # sun azimuth (0° = North, clockwise)
