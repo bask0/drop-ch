@@ -42,6 +42,7 @@ dependencies:
   - pvlib-python
   - imagemagick
   - owslib
+  - ffmpeg
   - pip
   - pip:
       - dask-labextension
@@ -58,4 +59,5 @@ dependencies:
       - rioxarray
       - xarray-spatial
       - line_profiler
+      - nbstripout
       - -e .[dev]
