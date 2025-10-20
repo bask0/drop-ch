@@ -80,3 +80,9 @@ dist/
 *.sqlite3
 *.db
 *.log
+
+# === Ignore animations ===
+**/anim
+**/anims
+**/animation
+**/animations
