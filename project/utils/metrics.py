@@ -157,14 +157,42 @@ def _nnse(
     return (1 / (2 - nse)).compute()
 
 
+def _kge_r(
+        obs: xr.DataArray,
+        mod: xr.DataArray,
+        dim: Dims):
+
+    return _r(obs=obs, mod=mod, dim=dim)
+
+
+def _kge_alpha(
+        obs: xr.DataArray,
+        mod: xr.DataArray,
+        dim: Dims) -> xr.DataArray:
+
+    ratio = mod.std(dim=dim, skipna=True) / obs.std(dim=dim, skipna=True)
+
+    return ratio.compute()
+
+
+def _kge_beta(
+        obs: xr.DataArray,
+        mod: xr.DataArray,
+        dim: Dims) -> xr.DataArray:
+
+    ratio = mod.mean(dim=dim, skipna=True) / obs.mean(dim=dim, skipna=True)
+
+    return ratio.compute()
+
+
 def _kge(
         obs: xr.DataArray,
         mod: xr.DataArray,
         dim: Dims) -> xr.DataArray:
 
-    r = _r(obs, mod, dim=dim)
-    alpha = mod.std(dim=dim) / obs.std(dim=dim)
-    beta = mod.mean(dim=dim) / obs.mean(dim=dim)
+    r = _kge_r(obs, mod, dim=dim)
+    alpha = _kge_alpha(obs, mod, dim=dim)
+    beta = _kge_beta(obs, mod, dim=dim)
 
     value = ((r - 1)**2 + (alpha - 1)**2 + (beta - 1)**2)
 
@@ -217,7 +245,7 @@ def _get_xflow_bias(
         obs_in_range = obs_i[sort_idx_in_range]
         mod_in_range = mod_i[sort_idx_in_range]
 
-        perc_bias = 100 * (mod_in_range - obs_in_range).sum() / obs_in_range.sum()
+        perc_bias = mod_in_range.sum() / obs_in_range.sum()
 
         da_res[idx] = perc_bias
 
@@ -257,21 +285,23 @@ def _fhv(
 
 
 METRIC_MAPPING: dict[str, dict] = dict(
-    bias={'func': _bias, 'name': 'Bias', 'direction': 'none'},
-    absbias={'func': _absbias, 'name': 'Absolute bias', 'direction': 'min'},
-    relbias={'func': _relbias, 'name': '%Bias', 'direction': 'none'},
-    relscale={'func': _relscale, 'name': '%Scale Bias', 'direction': 'none'},
-    mse={'func': _mse, 'name': 'Mean squared error (MSE)', 'direction': 'min'},
-    bias2={'func': _bias2, 'name': 'Squared bias', 'direction': 'min'},
+    bias={'func': _bias, 'name': r'Bias', 'direction': 'none'},
+    absbias={'func': _absbias, 'name': r'Absolute bias', 'direction': 'min'},
+    relbias={'func': _relbias, 'name': r'%Bias', 'direction': 'none'},
+    relscale={'func': _relscale, 'name': r'%Scale Bias', 'direction': 'none'},
+    mse={'func': _mse, 'name': r'Mean squared error (MSE)', 'direction': 'min'},
+    bias2={'func': _bias2, 'name': r'Squared bias', 'direction': 'min'},
     varerr={'func': _varerr, 'name': 'Variance error', 'direction': 'min'},
-    phaseerr={'func': _phaseerr, 'name': 'Phase error', 'direction': 'min'},
-    rmse={'func': _rmse, 'name': 'Root mean squared error (RMSE)', 'direction': 'min'},
-    nse={'func': _nse, 'name': 'Modeling efficiency (NSE)', 'direction': 'max'},
-    nnse={'func': _nnse, 'name': 'Normalized modeling efficiency (NNSE)', 'direction': 'max'},
-    kge={'func': _kge, 'name': 'Kling-Gupta efficiency (KGE)', 'direction': 'max'},
-    r={'func': _r, 'name': 'Pearson\'s correlation (r)', 'direction': 'max'},
-    flv={'func': _flv, 'name': '%Bias$_\mathrm{lowflow}$ (<Q.5)', 'direction': 'none'},
-    fhv={'func': _fhv, 'name': '%Bias$_\mathrm{highflow}$ (>Q.98)', 'direction': 'none'},
+    phaseerr={'func': _phaseerr, 'name': r'Phase error', 'direction': 'min'},
+    rmse={'func': _rmse, 'name': r'Root mean squared error (RMSE)', 'direction': 'min'},
+    nse={'func': _nse, 'name': r'Modeling efficiency (NSE)', 'direction': 'max'},
+    nnse={'func': _nnse, 'name': r'Normalized modeling efficiency (NNSE)', 'direction': 'max'},
+    kge={'func': _kge, 'name': r'Kling-Gupta efficiency', 'direction': 'max'},
+    kge_alpha={'func': _kge_alpha, 'name': r'Variability ratio ($\alpha_\mathrm{KGE}$)', 'direction': 'none'},
+    kge_beta={'func': _kge_beta, 'name': r'Bias ratio ($\beta_\mathrm{KGE}$)', 'direction': 'none'},
+    r={'func': _r, 'name': r'Linear corr. ($r_\mathrm{Pearson}$)', 'direction': 'max'},
+    flv={'func': _flv, 'name': r'Lowflow $\beta_\mathrm{KGE}$ ($\beta_{\mathrm{KGE}, \mathrm{LF}}$)', 'direction': 'none'},
+    fhv={'func': _fhv, 'name': r'Highflow $\beta_\mathrm{KGE}$ ($\beta_{\mathrm{KGE}, \mathrm{HF}}$)', 'direction': 'none'},
 )
 
 
