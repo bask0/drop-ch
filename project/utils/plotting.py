@@ -9,6 +9,7 @@ import warnings
 import cartopy.crs as ccrs
 import geopandas as gpd
 from matplotlib.axes import Axes
+from matplotlib.colorbar import Colorbar
 from matplotlib.patches import Patch
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
@@ -55,8 +56,9 @@ def despine(ax: Axes, which: str = 'L', remove_ticks: bool = False) -> None:
 
 
 def cbar_halo(
-        ax: Axes,
-        which: Literal['x', 'y'],
+        cbar: Colorbar | None = None,
+        ax: Axes | None = None,
+        which: Literal['x', 'y'] | None = None,
         linewidth: float = 5,
         color: str = 'w',
         labelsize: int = 8,
@@ -66,8 +68,11 @@ def cbar_halo(
     """Add a halo effect to the colorbar axis labels and tick labels.
 
     Args:
-        ax (Axes): The axes containing the colorbar.
-        which (Literal['x', 'y']): Which axis to apply the halo effect to ('x' or 'y').
+        cbar (Colorbar): The colorbar to modify. If None, `ax` must be provided.
+        ax (Axes | None): The axes containing the colorbar. If `cbar` is None, this must be provided
+            together with `which`.
+        which (Literal['x', 'y']): Which axis to apply the halo effect to ('x' or 'y'). Only required
+            if `cbar` is None.
         linewidth (float): The linewidth of the halo effect. Defaults to 5.
         color (str): The color of the halo effect. Defaults to 'white'.
         labelsize (int): Font size for the axis label. Defaults to 8.
@@ -78,6 +83,17 @@ def cbar_halo(
     """
 
     halo = [path_effects.withStroke(linewidth=linewidth, foreground=color, **kwargs)]
+
+    if cbar is None:
+        if ax is None or which is None:
+            raise ValueError('If `cbar` is None, both `ax` and `which` must be provided.')
+    else:
+        ax = cbar.ax
+
+        if cbar.orientation == 'vertical':
+            which = 'y'
+        else:
+            which = 'x'
 
     if which == 'x':
         axis = ax.xaxis
