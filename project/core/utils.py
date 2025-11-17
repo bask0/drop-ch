@@ -35,7 +35,7 @@ def get_zarr_v3_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
         encoding[var] = {
             'compressors': BloscCodec(
                 cname='zstd',
-                clevel=3,
+                clevel=clevel,
                 shuffle=BloscShuffle.shuffle
             ),
             'chunks': tuple(chunks.values())
