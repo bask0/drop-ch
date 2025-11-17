@@ -15,13 +15,14 @@ from zarr.codecs import BloscCodec, BloscShuffle
 logger = logging.getLogger('pytorch_lightning')
 
 
-def get_zarr_v3_encoding(ds: xr.Dataset) -> dict:
+def get_zarr_v3_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
     """Get encoding for the dataset to be saved to zarr.
 
     This fixes a known issue with the compressor when reading zarr v2 files and writing them with zarr v3.
 
     Args:
         ds (xr.Dataset): The dataset to get the encoding for.
+        clevel (int, optional): Compression level for data variables. Defaults to 3.
 
     Returns:
         dict: A dictionary with the encoding for each variable and coordinate in the dataset.
