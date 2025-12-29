@@ -31,7 +31,14 @@ def get_zarr_v3_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
     encoding = {}
 
     for var in ds.data_vars:
-        chunks = {dim: 1000 if dim == 'time' else len(ds[dim]) for dim in ds[var].dims}
+        chunks = {}
+        for dim in ds[var].dims:
+            if dim == 'time':
+                c = 1000
+            else:
+                c = len(ds[dim])
+        chunks[dim] = c
+
         encoding[var] = {
             'compressors': BloscCodec(
                 cname='zstd',
