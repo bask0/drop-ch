@@ -165,7 +165,7 @@ class HRUData(InMemoryDataset):
             self.save_variables = [self.target]
 
         if obs_mask is None:
-            xr.ones_like(ds.hru, dtype=bool)
+            obs_mask = xr.ones_like(ds.hru, dtype=bool)
 
         ds['has_obs'] = obs_mask
 
