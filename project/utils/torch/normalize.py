@@ -405,7 +405,7 @@ class LogXp(torch.nn.Module):
             means: TensorLike | None,
             clip_zero: bool = False,
             features_dim: int = -1) -> None:
-        """Initialize the Log1p module.
+        """Initialize the LogXp module.
 
         Args:
             epsilon (float): Small value added to inputs before log transformation to avoid log(0) issues.
@@ -555,7 +555,7 @@ class LogXp(torch.nn.Module):
             means = None
 
         args = {
-            'name': 'log1p',
+            'name': 'logXp',
             'epsilon': epsilon,
             'means': means,
             'clip_zero': clip_zero,
@@ -565,7 +565,7 @@ class LogXp(torch.nn.Module):
         return args
 
     def __repr__(self) -> str:
-        """Return a string representation of the Log1p module."""
+        """Return a string representation of the LogXp module."""
 
         target_centering = 'True' if self.means is not None else 'False'
 
@@ -675,7 +675,7 @@ class DataTansform(torch.nn.Module):
             self.transform = Normalizer(**kwargs)
         elif name == 'robust_standardizer':
             self.transform = RobustStandardizer(**kwargs)
-        elif name == 'log1p':
+        elif name == 'logXp':
             self.transform = LogXp(**kwargs)
         elif name == 'no_normalizer':
             self.transform = NoNormalizer()
