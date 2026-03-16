@@ -1,4 +1,4 @@
-name: streamflow-net
+name: streamflow-net-clean
 channels:
   - pytorch
   - nvidia
@@ -31,6 +31,8 @@ dependencies:
   - geopandas
   - pyreadr
   - richdem
+  - rioxarray
+  - xarray-spatial
   - matplotlib
   - seaborn
   - cartopy
@@ -40,9 +42,7 @@ dependencies:
   - nodejs
   - pymysql
   - pvlib-python
-  - imagemagick
   - owslib
-  - ffmpeg
   - pip
   - pip:
       - dask-labextension
@@ -56,8 +56,6 @@ dependencies:
       - einops
       - ipywidgets
       - IProgress
-      - rioxarray
-      - xarray-spatial
       - line_profiler
       - nbstripout
       - -e .[dev]
