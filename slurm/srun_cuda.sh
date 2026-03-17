@@ -5,15 +5,18 @@
 #SBATCH --time=72:00:00
 #SBATCH --mem-per-cpu=4G
 #SBATCH --account=es_schemm_gpu
-#SBATCH --gpus=nvidia_a100_80gb_pcie:1
+#SBATCH --gpus=gpu:1
+#SBATCH --output=slurm_logs/%j.out
 
 module load eth_proxy
 module load stack/2024-06 gcc/12.2.0
 module load cudnn/9.2.0
 module load cuda/12.8.0
 
-echo "Allocated resources:"
+printf "Allocated resources:"
 scontrol show job $SLURM_JOB_ID
+
+printf "Running command:\n$@\n"
 
 nvidia-smi
 
