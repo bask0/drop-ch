@@ -3,7 +3,7 @@ authors = [{name = "bask0", email = "29065166+bask0@users.noreply.github.com"}]
 dependencies = []
 name = "drop_ch"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "0.2.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["project"]
