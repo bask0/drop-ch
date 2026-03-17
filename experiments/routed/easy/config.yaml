@@ -5,4 +5,4 @@ data:
 
 tuning_engine:
   exp_dir: experiments/routed/easy
-  log_dir: /cluster/work/climate/kraftb/runs/routed/easy
+  log_dir: /cluster/work/climate/kraftb/streamflow_net/routed/easy

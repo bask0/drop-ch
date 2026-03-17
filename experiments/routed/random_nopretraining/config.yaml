@@ -5,7 +5,7 @@ data:
 
 tuning_engine:
   exp_dir: experiments/routed/random_nopretraining
-  log_dir: /cluster/work/climate/kraftb/runs/routed/random_nopretraining
+  log_dir: /cluster/work/climate/kraftb/streamflow_net/routed/random_nopretraining
 
 model:
   class_path: project.nn.streamflow_net.StreamflowNet
