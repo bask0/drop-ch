@@ -44,7 +44,7 @@ def graph_data_module(stat_features, dyn_features) -> GraphDataModule:
     k_hops = 200
 
     datamodule = GraphDataModule(
-        data_path='/net/argon/landclim/kraftb/machflow_routing/data/processed/harmonized_hru_data.zarr',
+        data_path='/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr',
         stat_features=stat_features,
         dyn_features=dyn_features,
         split_mode='random',
