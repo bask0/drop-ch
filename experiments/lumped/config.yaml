@@ -58,14 +58,14 @@ data:
     num_workers: 12
 
 trainer:
-  max_epochs: 200
+  max_epochs: 120
   gradient_clip_val: 1.0
 
 tuning_engine:
   exp_dir: experiments/lumped
   log_dir: /cluster/work/climate/kraftb/streamflow_net/lumped
   monitor: valid_loss
-  n_trials: 80
+  n_trials: 100
   num_folds: 1
   overwrite: False
 
@@ -79,7 +79,7 @@ tuning_engine:
   pruner:
     class_path: optuna.pruners.HyperbandPruner
     init_args:
-      min_resource: 10
+      min_resource: 20
       max_resource: 120
       reduction_factor: 3
 
