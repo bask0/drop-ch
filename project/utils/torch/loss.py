@@ -2,13 +2,14 @@
 
 import logging
 from typing import Literal
+
 import torch
 from torch import Tensor, nn
 from torch.linalg import vector_norm
 
 from project.utils.unit_conversion import convert_m3s_to_mmd
 
-logger = logging.getLogger('pytorch_lightning')
+logger = logging.getLogger("pytorch_lightning")
 
 
 class NSELoss(torch.nn.Module):
@@ -24,7 +25,7 @@ class NSELoss(torch.nn.Module):
     - Epsilon term (eps) to avoid exploding loss with small variance.
     """
 
-    def __init__(self, eps: float = 0.1, reduction: str = 'mean') -> None:
+    def __init__(self, eps: float = 0.1, reduction: str = "mean") -> None:
         """
         Initialize NSELoss.
 
@@ -49,10 +50,8 @@ class NSELoss(torch.nn.Module):
         self.eps = eps
         self.reduction = reduction
 
-        if reduction not in ('mean', 'none'):
-            raise ValueError(
-                f'\'reduction\' must be one of \'mean\' or \'none\', is \'{reduction}\'.'
-            )
+        if reduction not in ("mean", "none"):
+            raise ValueError(f"'reduction' must be one of 'mean' or 'none', is '{reduction}'.")
 
     def forward(self, input: Tensor, target: Tensor, basin_std: Tensor) -> Tensor:
         """
@@ -73,7 +72,7 @@ class NSELoss(torch.nn.Module):
 
         loss = weights * error2
 
-        if self.reduction == 'none':
+        if self.reduction == "none":
             return loss
         else:
             return loss.mean()
@@ -91,7 +90,7 @@ class SkillScore(torch.nn.Module):
 
     """
 
-    def __init__(self, reduction: str = 'mean', focal_loss_alpha: float | None = None) -> None:
+    def __init__(self, reduction: str = "mean", focal_loss_alpha: float | None = None) -> None:
         """
         Intialize NSELoss.
 
@@ -116,10 +115,8 @@ class SkillScore(torch.nn.Module):
 
         self.reduction = reduction
 
-        if reduction not in ('mean', 'none'):
-            raise ValueError(
-                f'\'reduction\' must be one of \'mean\' or \'none\', is \'{reduction}\'.'
-            )
+        if reduction not in ("mean", "none"):
+            raise ValueError(f"'reduction' must be one of 'mean' or 'none', is '{reduction}'.")
 
         self.focal_loss_alpha = focal_loss_alpha
 
@@ -149,9 +146,7 @@ class SkillScore(torch.nn.Module):
         """
 
         if input.shape != target.shape:
-            raise ValueError(
-                f'shape mismatch: input.shape {input.shape} != target.shape {target.shape}.'
-            )
+            raise ValueError(f"shape mismatch: input.shape {input.shape} != target.shape {target.shape}.")
 
         red_dim = tuple(range(1, target.ndim))
 
@@ -165,7 +160,7 @@ class SkillScore(torch.nn.Module):
             weights = 1 / (1 + torch.exp(-self.focal_loss_alpha * torch.abs(error_diff - 1)))
             loss = weights * loss
 
-        if self.reduction == 'none':
+        if self.reduction == "none":
             return loss
         else:
             return loss.mean()
@@ -213,17 +208,18 @@ class RegressionLoss(nn.Module):
     * target: (N, *), same shape as the input
     """
 
-    LOSS_FUNCTIONS = ('l1', 'l2', 'huber', 'nse', 'ss')
-    LOSS_FUNCTIONS_WITH_TAU = ('quantile', 'expectile')
+    LOSS_FUNCTIONS = ("l1", "l2", "huber", "nse", "ss")
+    LOSS_FUNCTIONS_WITH_TAU = ("quantile", "expectile")
 
     def __init__(
-            self,
-            criterion: str,
-            sqrt_transform: bool = False,
-            log_transform: bool = False,
-            log_transform_epsilon: float = 1e-4,
-            reduction='mean',
-            **kwargs) -> None:
+        self,
+        criterion: str,
+        sqrt_transform: bool = False,
+        log_transform: bool = False,
+        log_transform_epsilon: float = 1e-4,
+        reduction="mean",
+        **kwargs,
+    ) -> None:
         """Initialize RegressionLoss.
 
         Args:
@@ -249,20 +245,18 @@ class RegressionLoss(nn.Module):
         criterion = criterion.lower()
 
         if criterion not in self.LOSS_FUNCTIONS:
-            loss_functions_str = '(\'' + '\' | \''.join(self.LOSS_FUNCTIONS) + '\')'
-            raise ValueError(
-                f'argument `criterion` must be one of {loss_functions_str}, is \'{criterion}\'.'
-            )
+            loss_functions_str = "('" + "' | '".join(self.LOSS_FUNCTIONS) + "')"
+            raise ValueError(f"argument `criterion` must be one of {loss_functions_str}, is '{criterion}'.")
 
         self.criterion = criterion
 
         loss_fn_args: dict = dict(reduction=reduction, **kwargs)
-        if self.criterion == 'huber':
+        if self.criterion == "huber":
             loss_fn_args.update(dict(delta=0.3))
 
         if sqrt_transform and log_transform:
             raise ValueError(
-                'cannot pass both `sqrt_transform=True` and `log_transform=True`; they are mutually exclusive.'
+                "cannot pass both `sqrt_transform=True` and `log_transform=True`; they are mutually exclusive."
             )
 
         self.sqrt_transform = sqrt_transform
@@ -270,31 +264,31 @@ class RegressionLoss(nn.Module):
         self.log_transform_epsilon = log_transform_epsilon
 
         if self.sqrt_transform:
+
             def transform_fn(x: Tensor) -> Tensor:
                 return torch.sqrt(x)
         elif self.log_transform:
+
             def transform_fn(x: Tensor) -> Tensor:
                 return torch.log(x + self.log_transform_epsilon)
         else:
+
             def transform_fn(x: Tensor) -> Tensor:
                 return x
 
         self.transform_fn = transform_fn
 
         self.loss_fn = {
-            'l1': nn.L1Loss,
-            'l2': nn.MSELoss,
-            'huber': nn.HuberLoss,
-            'nse': NSELoss,
-            'ss': SkillScore,
+            "l1": nn.L1Loss,
+            "l2": nn.MSELoss,
+            "huber": nn.HuberLoss,
+            "nse": NSELoss,
+            "ss": SkillScore,
         }[self.criterion](**loss_fn_args)
 
     def forward(
-            self,
-            input: Tensor,
-            target: Tensor,
-            reference: Tensor | None = None,
-            basin_std: Tensor | None = None) -> Tensor:
+        self, input: Tensor, target: Tensor, reference: Tensor | None = None, basin_std: Tensor | None = None
+    ) -> Tensor:
         """Forward call, calculate loss from input and target, must have same shape.
 
         Args:
@@ -314,21 +308,17 @@ class RegressionLoss(nn.Module):
         input_masked = self.transform_fn(input_masked)
         target_masked = self.transform_fn(target_masked)
 
-        if self.criterion == 'nse':
+        if self.criterion == "nse":
             if basin_std is None:
-                raise ValueError(
-                    '\'basin_std\' required with NSE criterion.'
-                )
+                raise ValueError("'basin_std' required with NSE criterion.")
 
             basin_std_masked = basin_std.expand_as(target)[mask]
 
             loss = self.loss_fn(input_masked, target_masked, basin_std_masked)
 
-        elif self.criterion == 'ss':
+        elif self.criterion == "ss":
             if reference is None:
-                raise ValueError(
-                    '\'reference\' required with SS criterion.'
-                )
+                raise ValueError("'reference' required with SS criterion.")
 
             reference_masked = reference[mask]
             reference_masked = self.transform_fn(reference_masked)
@@ -349,7 +339,7 @@ class RegressionLoss(nn.Module):
         """
         criterion = self.criterion
         sqrt_transform = self.sqrt_transform
-        s = f'RegressionLoss({criterion=}, {sqrt_transform=})'
+        s = f"RegressionLoss({criterion=}, {sqrt_transform=})"
         return s
 
 
@@ -366,10 +356,7 @@ class EnergyLoss(nn.Module):
     * target: (N, *), same shape as the input
     """
 
-    def __init__(
-            self,
-            beta: float = 1.0,
-            es_length: int = 1) -> None:
+    def __init__(self, beta: float = 1.0, es_length: int = 1) -> None:
         """
         Initialize RegressionLoss.
 
@@ -385,13 +372,9 @@ class EnergyLoss(nn.Module):
 
         self.beta = beta
         self.es_length = es_length
-        self.criterion = 'es'
+        self.criterion = "es"
 
-    def forward(
-            self,
-            input0: Tensor,
-            input1: Tensor,
-            target: Tensor) -> Tensor:
+    def forward(self, input0: Tensor, input1: Tensor, target: Tensor) -> Tensor:
         """Forward call, calculate loss from input0, input1,  and target, must have same shape.
 
         Args:
@@ -422,13 +405,9 @@ class EnergyLoss(nn.Module):
         input_diff = (input0 - input1).where(mask, 0.0)
 
         # (batch, L)
-        s1 = (
-            0.5 * self.mean_masked(
-                (vector_norm(diff0, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1
-            ) + 0.5 * self.mean_masked(
-                (vector_norm(diff1, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1
-            )
-        )
+        s1 = 0.5 * self.mean_masked(
+            (vector_norm(diff0, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1
+        ) + 0.5 * self.mean_masked((vector_norm(diff1, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1)
 
         # (batch, L)
         s2 = self.mean_masked((vector_norm(input_diff, 2, dim=-1) + EPS).pow(self.beta), mask_num_finite, dim=-1)
@@ -473,8 +452,8 @@ class EnergyLoss(nn.Module):
         if x.ndim == 3:
             if x.shape[1] != 1:
                 raise ValueError(
-                    f'for a 3D tensor, the second dimension must have size 1 (is {x.shape[1]}) because '
-                    'more than one target variable not supported.'
+                    f"for a 3D tensor, the second dimension must have size 1 (is {x.shape[1]}) because "
+                    "more than one target variable not supported."
                 )
 
             x = x.squeeze(1)
@@ -510,7 +489,7 @@ class EnergyLoss(nn.Module):
         """
         beta = self.beta
         es_length = self.es_length
-        s = f'EnergyLoss({beta=}, {es_length=})'
+        s = f"EnergyLoss({beta=}, {es_length=})"
         return s
 
 
@@ -525,16 +504,22 @@ class QLoss(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            use_water_freq_constraint: bool = False,
-            lake_constraint_rate_constant: float = 0.3) -> None:
+        self,
+        use_water_freq_constraint: bool = False,
+        lake_constraint_rate_constant: float = 0.3,
+        lake_constraint_strength: float = 1.0,
+    ) -> None:
         """Initialize the loss module with optional water frequency and lake constraints.
 
         Args:
             use_water_freq_constraint (bool, optional): If True, applies a water frequency constraint to the
                 loss calculation. Defaults to False.
-            lake_constraint_rate_constant (float, optional): Rate constant for the lake constraint
-                regularization term. Defaults to 0.3.
+            lake_constraint_rate_constant (float, optional): Rate constant for the lake constraint.
+                Weight decays as ``exp(-rate * epoch)``. Defaults to 0.3.
+            lake_constraint_strength (float, optional): Absolute strength of the lake constraint.
+                Loss is computed as ``reg_loss + strength * water_freq_loss * weight``, so setting
+                this to the typical scale of reg_loss makes the constraint compete on equal footing.
+                Defaults to 1.0.
 
         """
 
@@ -542,20 +527,22 @@ class QLoss(torch.nn.Module):
 
         self.use_water_freq_constraint = use_water_freq_constraint
         self.lake_constraint_rate_constant = lake_constraint_rate_constant
-        self.loss_fun = RegressionLoss(criterion='L2', log_transform=False, reduction='none')
+        self.lake_constraint_strength = lake_constraint_strength
+        self.loss_fun = RegressionLoss(criterion="L2", log_transform=False, reduction="none")
 
         self.loss_state = {}
 
     def forward(
-            self,
-            y_hat,
-            batch,
-            mode: Literal['train', 'valid', 'test'],
-            step: int,
-            subset: Tensor | None = None,
-            y_instant: Tensor | None = None,
-            x_retention: Tensor | None = None,
-            prediction_length: int = 0) -> tuple[Tensor, dict[str, Tensor]]:
+        self,
+        y_hat,
+        batch,
+        mode: Literal["train", "valid", "test"],
+        step: int,
+        subset: Tensor | None = None,
+        y_instant: Tensor | None = None,
+        x_retention: Tensor | None = None,
+        prediction_length: int = 0,
+    ) -> tuple[Tensor, dict[str, Tensor]]:
         """Compute the loss and associated metrics for a batch of predictions.
 
         Args:
@@ -584,61 +571,48 @@ class QLoss(torch.nn.Module):
         """
 
         # Select subset of HRUs on which we evaluate loss function.
-        if mode == 'train':
+        if mode == "train":
             # For training, these are sampled HRUs.
             eval_subset = self.get_sample_indices(batch)
-        elif mode in ('valid', 'test'):
+        elif mode in ("valid", "test"):
             # For validation, these are all HRUs with observations, including such upstream to the sampled one.
             eval_subset = batch.has_obs
         else:
-            raise ValueError('\'mode\' must be one of \'train\', \'valid\', or \'test\'.')
+            raise ValueError("'mode' must be one of 'train', 'valid', or 'test'.")
 
         if self.use_water_freq_constraint and (x_retention is None):
-            raise ValueError('with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.')
+            raise ValueError("with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.")
 
         upstream_area = batch.upstream_area[eval_subset].unsqueeze(-1)
 
         y_hat = convert_m3s_to_mmd(y_hat[eval_subset, -prediction_length:, 0], upstream_area)
         y = convert_m3s_to_mmd(batch.y[eval_subset, -prediction_length:, 0], upstream_area)
 
-        if self.loss_fun.criterion == 'nse':
+        if self.loss_fun.criterion == "nse":
             q_std = batch.q_std[eval_subset].unsqueeze(-1)
             q_std = convert_m3s_to_mmd(q_std, upstream_area)
-            reg_loss_batch = self.loss_fun(
-                input=y_hat,
-                target=y,
-                basin_std=q_std
-            )
-        elif self.loss_fun.criterion in ['l1', 'l2', 'huber']:
-            reg_loss_batch = self.loss_fun(
-                input=y_hat,
-                target=y
-            )
-        elif self.loss_fun.criterion == 'ss':
+            reg_loss_batch = self.loss_fun(input=y_hat, target=y, basin_std=q_std)
+        elif self.loss_fun.criterion in ["l1", "l2", "huber"]:
+            reg_loss_batch = self.loss_fun(input=y_hat, target=y)
+        elif self.loss_fun.criterion == "ss":
             assert y_instant is not None
-            y_instant = convert_m3s_to_mmd(
-                y_instant[eval_subset, -prediction_length:, 0], upstream_area)
-            reg_loss_batch = self.loss_fun(
-                input=y_hat,
-                target=y,
-                reference=y_instant
-            )
+            y_instant = convert_m3s_to_mmd(y_instant[eval_subset, -prediction_length:, 0], upstream_area)
+            reg_loss_batch = self.loss_fun(input=y_hat, target=y, reference=y_instant)
         else:
-            raise NotImplementedError(
-                f'`RegressionLoss(criterion={self.loss_fun.criterion}, ...)` not implemented.'
-            )
+            raise NotImplementedError(f"`RegressionLoss(criterion={self.loss_fun.criterion}, ...)` not implemented.")
 
-        self.store_batch_losses(name='reg_loss', mode=mode, values=reg_loss_batch)
+        self.store_batch_losses(name="reg_loss", mode=mode, values=reg_loss_batch)
         reg_loss = reg_loss_batch.mean()
 
         if self.use_water_freq_constraint:
-            assert x_retention is not None, \
-                'with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.'
+            assert x_retention is not None, (
+                "with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`."
+            )
 
             decay_const = torch.ones_like(batch.is_lake[:1]) * self.lake_constraint_rate_constant
             current_step = torch.ones_like(batch.is_lake[:1]) * step
             weight = torch.exp(-decay_const * current_step)
-            is_lake = batch.is_lake[subset] if mode == 'train' else batch.is_lake
+            is_lake = batch.is_lake[subset] if mode == "train" else batch.is_lake
 
             t0 = torch.nn.functional.relu(-x_retention + 0.5)
             t1 = torch.nn.functional.relu(x_retention - 0.1)
@@ -660,13 +634,13 @@ class QLoss(torch.nn.Module):
             weight = 0.0
             water_freq_loss = 0.0
 
-        loss = reg_loss + water_freq_loss * weight * 40
+        loss = reg_loss + self.lake_constraint_strength * water_freq_loss * weight
 
         log_loss = {
-            'total_loss': loss,
-            'loss': reg_loss,
-            'water_freq_loss': water_freq_loss,
-            'water_freq_loss_weight': weight
+            "total_loss": loss,
+            "loss": reg_loss,
+            "water_freq_loss": water_freq_loss,
+            "water_freq_loss_weight": weight,
         }
 
         return loss, log_loss
@@ -684,7 +658,7 @@ class QLoss(torch.nn.Module):
 
         return batch.mapping + batch.ptr[:-1]
 
-    def store_batch_losses(self, name: str, mode: Literal['train', 'valid', 'test'], values: Tensor) -> None:
+    def store_batch_losses(self, name: str, mode: Literal["train", "valid", "test"], values: Tensor) -> None:
         """Store the batch loss values for a given loss name and mode.
 
         Args:
@@ -696,13 +670,13 @@ class QLoss(torch.nn.Module):
             None
         """
 
-        full_name = f'{mode}_{name}'
+        full_name = f"{mode}_{name}"
         if name not in self.loss_state:
             self.loss_state[full_name] = []
 
         self.loss_state[full_name].append(values.detach().cpu())
 
-    def reset_loss_state(self, mode: Literal['train', 'valid', 'test']) -> None:
+    def reset_loss_state(self, mode: Literal["train", "valid", "test"]) -> None:
         """Reset the loss state for the specified mode by removing all entries in `self.loss_state` for given mode.
 
         Args:

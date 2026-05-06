@@ -61,6 +61,7 @@ dask-labextension = "*"
 nodejs = "*"
 
 # ML / DL & Experiment Tracking
+setuptools = "<71"
 optuna = "*"
 optuna-integration = "*"
 tensorboard = "*"

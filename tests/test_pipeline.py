@@ -17,6 +17,7 @@ np.random.seed(0)
 # Helpers / test fixtures
 # -----------------------
 
+
 @pytest.fixture(scope="session")
 def stat_features():
     return ["area", "upstream_area", "is_lake", "water_freq"]
@@ -37,6 +38,7 @@ def dyn_features():
 # HRUDataModule smoke test
 # -----------------------
 
+
 @pytest.fixture(scope="session")
 def graph_data_module(stat_features, dyn_features) -> GraphDataModule:
     temporal_context_length = 200
@@ -44,17 +46,17 @@ def graph_data_module(stat_features, dyn_features) -> GraphDataModule:
     k_hops = 200
 
     datamodule = GraphDataModule(
-        data_path='/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr',
+        data_path="/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr",
         stat_features=stat_features,
         dyn_features=dyn_features,
-        split_mode='random',
+        split_mode="random",
         aggregate_catchments=True,
         k_hops=k_hops,
         temporal_context_length=temporal_context_length,
         prediction_length=prediction_length,
         batch_size=2,
         num_workers=1,
-        ds_subset={'time': '2010'}
+        ds_subset={"time": "2010"},
     )
 
     return datamodule

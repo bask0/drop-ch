@@ -1,25 +1,26 @@
 """Data module for handling HRU data in PyTorch Geometric format."""
 
+import warnings
 from dataclasses import fields, is_dataclass
 from typing import Callable, Literal
-import warnings
-from dask import config as dask_config
+
 import lightning.pytorch as pl
 import numpy as np
 import torch
+import xarray as xr
+from dask import config as dask_config
 from torch import Tensor
 from torch.utils.data import DataLoader, default_collate
 from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.loader import DataLoader as TGDataLoader
 from torch_geometric.utils import add_self_loops, k_hop_subgraph
 from torch_sparse import SparseTensor
-import xarray as xr
 
 from project.data.splitting import CatchmentSplitter, HRUSplitter
 from project.utils.torch.normalize import LogXp, NoNormalizer, Normalizer
 from project.utils.typing import HRUSample, assert_non_NaN
 
-dask_config.set(scheduler='single-threaded')
+dask_config.set(scheduler="single-threaded")
 
 
 def suppress_sparse_csc_warning(idx: int):
@@ -36,7 +37,7 @@ def suppress_sparse_csc_warning(idx: int):
     Returns:
         None
     """
-    warnings.filterwarnings('ignore', message='Sparse CSC tensor support is in beta state', category=UserWarning)
+    warnings.filterwarnings("ignore", message="Sparse CSC tensor support is in beta state", category=UserWarning)
 
 
 class DataCheckError(Exception):
@@ -91,19 +92,20 @@ class HRUData(InMemoryDataset):
     """HRUData class for creating a PyTorch Geometric dataset from an xarray dataset."""
 
     def __init__(
-            self,
-            ds: xr.Dataset,
-            obs_mask: xr.DataArray | None,
-            stat_features: list[str],
-            stat_routing_features: list[str] | None = None,
-            dyn_features: list[str] | None = None,
-            k_hops: int = 10,
-            temporal_context_length: int = 100,
-            prediction_length: int = 20,
-            hru_samples: list[int] | None = None,
-            use_prevah: bool = False,
-            aggregate_catchments: bool = False,
-            transform: None | Callable = None):
+        self,
+        ds: xr.Dataset,
+        obs_mask: xr.DataArray | None,
+        stat_features: list[str],
+        stat_routing_features: list[str] | None = None,
+        dyn_features: list[str] | None = None,
+        k_hops: int = 10,
+        temporal_context_length: int = 100,
+        prediction_length: int = 20,
+        hru_samples: list[int] | None = None,
+        use_prevah: bool = False,
+        aggregate_catchments: bool = False,
+        transform: None | Callable = None,
+    ):
         """
         Initialize HRUData class.
 
@@ -131,7 +133,7 @@ class HRUData(InMemoryDataset):
         super().__init__(transform=transform)
 
         # The area corresponds to the upstream area if we use aggregated HSUs.
-        if aggregate_catchments and 'upstream_area' not in stat_features:
+        if aggregate_catchments and "upstream_area" not in stat_features:
             raise ValueError(
                 "When using aggregate_catchments, 'upstream_area' must be included in the static features."
             )
@@ -147,35 +149,31 @@ class HRUData(InMemoryDataset):
         self.aggregate_catchments = aggregate_catchments
 
         # Assign continuous HRU indices for easier indexing
-        ds = ds.assign_coords(
-            hru_i=(
-                'hru', np.arange(len(ds.hru))
-            )
-        )
+        ds = ds.assign_coords(hru_i=("hru", np.arange(len(ds.hru))))
 
         if self.use_prevah:
             # ds.q_prevah_mmd.load()
-            self.target = 'q_prevah_mmd'
+            self.target = "q_prevah_mmd"
             self.save_variables = [self.target]
         elif self.aggregate_catchments:
-            self.target = 'Q_obs_mmd'
+            self.target = "Q_obs_mmd"
             self.save_variables = [self.target]
         else:
-            self.target = 'Q_obs_m3s'
+            self.target = "Q_obs_m3s"
             self.save_variables = [self.target]
 
         if obs_mask is None:
             obs_mask = xr.ones_like(ds.hru, dtype=bool)
 
-        ds['has_obs'] = obs_mask
+        ds["has_obs"] = obs_mask
 
         # Set HRUs to use as samples (these are iterated)
         if hru_samples is None:
-            ds['is_sample'] = obs_mask
+            ds["is_sample"] = obs_mask
         else:
-            ds['is_sample'] = ds.hru.isin(hru_samples)
+            ds["is_sample"] = ds.hru.isin(hru_samples)
 
-        ds = ds.reset_coords(['x', 'y'], drop=False)
+        ds = ds.reset_coords(["x", "y"], drop=False)
 
         # Build a mapping from HRU value to index for fast lookup
         hru_value_to_index = {v: i for i, v in enumerate(ds.hru.values)}
@@ -191,13 +189,25 @@ class HRUData(InMemoryDataset):
 
         # Check variable existence and dimensions
         if self.stat_features is not None:
-            self._check_variables(ds=ds, variables=self.stat_features, expected_dims={'hru', })
+            self._check_variables(
+                ds=ds,
+                variables=self.stat_features,
+                expected_dims={
+                    "hru",
+                },
+            )
 
         if self.stat_routing_features is not None:
-            self._check_variables(ds=ds, variables=self.stat_routing_features, expected_dims={'hru', })
+            self._check_variables(
+                ds=ds,
+                variables=self.stat_routing_features,
+                expected_dims={
+                    "hru",
+                },
+            )
 
         if self.dyn_features is not None:
-            self._check_variables(ds=ds, variables=self.dyn_features, expected_dims={'hru', 'time'})
+            self._check_variables(ds=ds, variables=self.dyn_features, expected_dims={"hru", "time"})
 
         self.ds = ds
 
@@ -225,7 +235,8 @@ class HRUData(InMemoryDataset):
             or an `HRUSample` (for aggregated or single HRU samples).
         """
         import warnings
-        warnings.filterwarnings('ignore', '.*Sparse CSR tensor support is in beta state.*')
+
+        warnings.filterwarnings("ignore", ".*Sparse CSR tensor support is in beta state.*")
 
         if self.aggregate_catchments:
             return self.get_catchment(idx=idx)
@@ -262,11 +273,12 @@ class HRUData(InMemoryDataset):
             edge_index=self.edge_index,
             # num_nodes=len(ds.hru),
             directed=False,
-            relabel_nodes=True)
+            relabel_nodes=True,
+        )
 
         # hrus x 1
-        hru_area = assert_non_NaN(self.get_ds_feature('area', hru=subset))
-        upstream_area = assert_non_NaN(self.get_ds_feature('upstream_area', hru=hru_idx))
+        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=subset))
+        upstream_area = assert_non_NaN(self.get_ds_feature("upstream_area", hru=hru_idx))
 
         # num static
         x = (self.get_stat_features(hru=subset) * hru_area[:, None]).sum(0) / upstream_area
@@ -278,10 +290,10 @@ class HRUData(InMemoryDataset):
         Q_obs = assert_non_NaN(self.get_q_obs(hru=hru_idx))
 
         # 1
-        is_lake = assert_non_NaN(self.get_ds_feature('is_lake', hru=hru_idx)).type(x.dtype)
+        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
 
         # 1
-        water_freq = assert_non_NaN(self.get_ds_feature('water_freq', hru=hru_idx)).type(x.dtype)
+        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
 
         time_slice = self.get_time_slice(target=Q_obs)
 
@@ -302,7 +314,7 @@ class HRUData(InMemoryDataset):
             hru_area=upstream_area,
             is_lake=is_lake,
             water_freq=water_freq,
-            time_slice=time_slice_serialized
+            time_slice=time_slice_serialized,
         )
 
     def get_hru(self, idx: int) -> HRUSample:
@@ -338,13 +350,13 @@ class HRUData(InMemoryDataset):
         # Get PREVAH streamflow
         q_prevah = assert_non_NaN(self.get_q_prevah(hru=hru_idx))
         # Get precipitation and air temperature
-        prec = assert_non_NaN(self.get_ds_feature(['prec'], hru=hru_idx))
-        tair = assert_non_NaN(self.get_ds_feature(['tair'], hru=hru_idx))
+        prec = assert_non_NaN(self.get_ds_feature(["prec"], hru=hru_idx))
+        tair = assert_non_NaN(self.get_ds_feature(["tair"], hru=hru_idx))
 
         # Get HRU area and other attributes
-        hru_area = assert_non_NaN(self.get_ds_feature('area', hru=hru_idx))
-        is_lake = assert_non_NaN(self.get_ds_feature('is_lake', hru=hru_idx)).type(x.dtype)
-        water_freq = assert_non_NaN(self.get_ds_feature('water_freq', hru=hru_idx)).type(x.dtype)
+        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=hru_idx))
+        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
+        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
 
         # Determine valid time slice for this HRU
         time_slice = self.get_time_slice(target=Q_emulated)
@@ -371,7 +383,7 @@ class HRUData(InMemoryDataset):
             hru_area=hru_area,
             is_lake=is_lake,
             water_freq=water_freq,
-            time_slice=time_slice_serialized
+            time_slice=time_slice_serialized,
         )
 
     def get_graph(self, idx: int) -> Data:
@@ -400,7 +412,8 @@ class HRUData(InMemoryDataset):
             edge_index=self.edge_index,
             # num_nodes=len(ds.hru),
             directed=False,
-            relabel_nodes=True)
+            relabel_nodes=True,
+        )
 
         # Get static features for the subgraph nodes
         x = assert_non_NaN(self.get_stat_features(hru=subset))
@@ -417,15 +430,15 @@ class HRUData(InMemoryDataset):
         # Get PREVAH streamflow for the subgraph nodes
         q_prevah = assert_non_NaN(self.get_q_prevah(hru=subset))
         # Get precipitation for the subgraph nodes
-        prec = assert_non_NaN(self.get_ds_feature(['prec'], hru=subset))
+        prec = assert_non_NaN(self.get_ds_feature(["prec"], hru=subset))
         # Get air temperature for the subgraph nodes
-        tair = assert_non_NaN(self.get_ds_feature(['tair'], hru=subset))
+        tair = assert_non_NaN(self.get_ds_feature(["tair"], hru=subset))
 
-        hru_area = assert_non_NaN(self.get_ds_feature('area', hru=subset))
-        has_obs = assert_non_NaN(self.get_ds_feature('has_obs', hru=subset))
-        upstream_area = assert_non_NaN(self.get_ds_feature('upstream_area', hru=subset))
-        is_lake = assert_non_NaN(self.get_ds_feature('is_lake', hru=subset)).type(x.dtype)
-        water_freq = assert_non_NaN(self.get_ds_feature('water_freq', hru=subset)).type(x.dtype)
+        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=subset))
+        has_obs = assert_non_NaN(self.get_ds_feature("has_obs", hru=subset))
+        upstream_area = assert_non_NaN(self.get_ds_feature("upstream_area", hru=subset))
+        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=subset)).type(x.dtype)
+        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=subset)).type(x.dtype)
 
         # Determine valid time slice for the target HRU
         time_slice = self.get_time_slice(target=Q_obs[mapping])
@@ -503,11 +516,8 @@ class HRUData(InMemoryDataset):
 
             # Only keep indices that allow for a full context and prediction window
             timesteps_with_obs = timesteps_with_obs[
-                (
-                    timesteps_with_obs >= self.temporal_context_length
-                ) & (
-                    timesteps_with_obs <= timesteps_with_obs.max() - self.prediction_length + 1
-                )
+                (timesteps_with_obs >= self.temporal_context_length)
+                & (timesteps_with_obs <= timesteps_with_obs.max() - self.prediction_length + 1)
             ]
             if len(timesteps_with_obs) == 0:
                 # If no valid time window, return a default slice (may be all NaN)
@@ -541,10 +551,7 @@ class HRUData(InMemoryDataset):
                 indicate the presence of an edge between nodes.
         """
 
-        A = SparseTensor(
-            row=edge_index[0],
-            col=edge_index[1],
-            sparse_sizes=(num_nodes, num_nodes))
+        A = SparseTensor(row=edge_index[0], col=edge_index[1], sparse_sizes=(num_nodes, num_nodes))
 
         return A
 
@@ -610,15 +617,13 @@ class HRUData(InMemoryDataset):
         if subset is None:
             subset_sel = {}
         else:
-            subset_sel = {'hru': subset}
+            subset_sel = {"hru": subset}
 
         xy_coords = self.darray2tensor(self.get_coords(**subset_sel))
 
         assert xy_coords is not None
 
-        dist = torch.sqrt(
-            (xy_coords[col, 0] - xy_coords[row, 0]) ** 2 + (xy_coords[col, 1] - xy_coords[row, 1]) ** 2
-        )
+        dist = torch.sqrt((xy_coords[col, 0] - xy_coords[row, 0]) ** 2 + (xy_coords[col, 1] - xy_coords[row, 1]) ** 2)
 
         return dist
 
@@ -650,18 +655,15 @@ class HRUData(InMemoryDataset):
         dist_cumul = torch.zeros(num_nodes)
 
         for k_ in range(0, k.max() + 1):
-
             row_ = row[k == k_]
             col_ = col[k == k_]
 
             if k_ == 0:
-
                 dist = torch.zeros(num_nodes)
 
                 dist_list.append(dist)
 
             else:
-
                 dist = torch.sqrt(
                     (xy_coords[col_, 0] - xy_coords[row_, 0]) ** 2 + (xy_coords[col_, 1] - xy_coords[row_, 1]) ** 2
                 )
@@ -702,7 +704,6 @@ class HRUData(InMemoryDataset):
         k_list = []
 
         for k in range(k_hops):
-
             row, col = Ak.coo()[:2]
 
             if len(row) == 0:
@@ -759,7 +760,7 @@ class HRUData(InMemoryDataset):
 
         x = self.ds[[self.target]].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_q_emulated(self, **isel) -> Tensor | None:
         """
@@ -772,9 +773,9 @@ class HRUData(InMemoryDataset):
             Tensor | None: The selected emulated discharge as a tensor.
         """
 
-        x = self.ds[['Q_emulated']].isel(**isel)
+        x = self.ds[["Q_emulated"]].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_q_prevah(self, **isel) -> Tensor | None:
         """
@@ -787,9 +788,9 @@ class HRUData(InMemoryDataset):
             Tensor | None: PREVAH discharge as a tensor.
         """
 
-        x = self.ds[['q_prevah_mmd']].isel(**isel)
+        x = self.ds[["q_prevah_mmd"]].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_stat_features(self, **isel) -> Tensor | None:
         """
@@ -804,7 +805,7 @@ class HRUData(InMemoryDataset):
 
         x = self.ds[self.stat_features].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_stat_routing_features(self, **isel) -> Tensor | None:
         """
@@ -822,7 +823,7 @@ class HRUData(InMemoryDataset):
 
         x = self.ds[self.stat_routing_features].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_stat_edge_features(self, **isel) -> Tensor | None:
         """
@@ -835,14 +836,14 @@ class HRUData(InMemoryDataset):
             Tensor | None: Tensor of static edge features.
         """
 
-        raise NotImplementedError('edge features not implemented yet.')
+        raise NotImplementedError("edge features not implemented yet.")
 
         if self.stat_edge_features is None:
             return None
 
         x = self.ds[self.stat_edge_features].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_dyn_features(self, **isel) -> Tensor | None:
         """
@@ -857,7 +858,7 @@ class HRUData(InMemoryDataset):
 
         x = self.ds[self.dyn_features].isel(**isel)
 
-        return self.darray2tensor(x.to_array('variable').transpose(..., 'time', 'variable').astype('float32'))
+        return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_coords(self, **isel) -> xr.DataArray:
         """
@@ -870,8 +871,8 @@ class HRUData(InMemoryDataset):
             xr.DataArray: Array containing coordinates (x, y).
         """
 
-        xy = self.ds[['x', 'y']].isel(**isel)
-        return xy.to_array('variable').transpose(..., 'variable')
+        xy = self.ds[["x", "y"]].isel(**isel)
+        return xy.to_array("variable").transpose(..., "variable")
 
     def get_ds_feature(self, feature: str | list[str], **isel) -> Tensor | None:
         """
@@ -886,13 +887,14 @@ class HRUData(InMemoryDataset):
         """
 
         if isinstance(feature, str):
-            return self.darray2tensor(
-                self.ds[feature].isel(**isel).transpose(
-                    ..., 'time', missing_dims='ignore'))
+            return self.darray2tensor(self.ds[feature].isel(**isel).transpose(..., "time", missing_dims="ignore"))
         else:
             return self.darray2tensor(
-                self.ds[feature].isel(**isel).to_array('variable').transpose(
-                    ..., 'time', 'variable', missing_dims='ignore'))
+                self.ds[feature]
+                .isel(**isel)
+                .to_array("variable")
+                .transpose(..., "time", "variable", missing_dims="ignore")
+            )
 
     @staticmethod
     def darray2tensor(x: xr.DataArray | None) -> Tensor | None:
@@ -911,11 +913,7 @@ class HRUData(InMemoryDataset):
 
         return torch.tensor(x.values)
 
-    def _check_variables(
-            self,
-            ds: xr.Dataset,
-            variables: list[str],
-            expected_dims: set[str]) -> None:
+    def _check_variables(self, ds: xr.Dataset, variables: list[str], expected_dims: set[str]) -> None:
         """
         Check that all given variables exist in the dataset and have the expected dimensions.
 
@@ -934,9 +932,7 @@ class HRUData(InMemoryDataset):
                 variables_not_found.append(variable)
 
         if len(variables_not_found) > 0:
-            raise DataCheckError(
-                f'variables not found in dataset: {*variables_not_found,}'
-            )
+            raise DataCheckError(f"variables not found in dataset: {(*variables_not_found,)}")
 
         dimension_mismatches = {}
         for variable in variables:
@@ -944,13 +940,11 @@ class HRUData(InMemoryDataset):
                 dimension_mismatches[variable] = ds[variable].dims
 
         if len(dimension_mismatches) > 0:
-            s = ''
+            s = ""
             for k, v in dimension_mismatches.items():
-                s += f'\n- {k:<10}-> {*v,}'
+                s += f"\n- {k:<10}-> {(*v,)}"
 
-            raise DataCheckError(
-                f'variables do not have expected dimensions {*expected_dims,}:{s}'
-            )
+            raise DataCheckError(f"variables do not have expected dimensions {(*expected_dims,)}:{s}")
 
     def get_sample_indices(self, batch) -> Tensor:
         """
@@ -1036,7 +1030,7 @@ class HRUData(InMemoryDataset):
             list[str]: List of all feature names used in the dataset.
         """
 
-        features = ['x', 'y']
+        features = ["x", "y"]
         for vars in [self.stat_features, self.stat_routing_features, self.dyn_features]:
             if vars is not None:
                 features.extend(vars)
@@ -1097,7 +1091,7 @@ class GraphDataModule(pl.LightningDataModule):
         dyn_features: list[str],
         stat_routing_features: list[str] | None = None,
         norm_targets: bool = True,
-        split_mode: Literal['easy', 'hard', 'random'] = 'random',
+        split_mode: Literal["easy", "hard", "random"] = "random",
         aggregate_catchments: bool = False,
         k_hops: int = 10,
         temporal_context_length: int = 100,
@@ -1108,6 +1102,8 @@ class GraphDataModule(pl.LightningDataModule):
         load_ds_to_memory: bool = True,
         num_folds: int = 1,  # Keep for compatibility, not used in this class.
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
+        val_time_range: list[str] | None = None,
+        skip_data_init: bool = False,
     ) -> None:
         """
         Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
@@ -1140,21 +1136,21 @@ class GraphDataModule(pl.LightningDataModule):
             ds = ds.sel(**ds_subset)
 
         train_catchments, valid_catchments, test_catchments, use_random_catchments = CatchmentSplitter(
-            mode=split_mode).compute()
+            mode=split_mode
+        ).compute()
 
-        ds = ds.assign_coords(
-            hru_i=(
-                'hru', np.arange(len(ds.hru))
-            )
-        )
+        ds = ds.assign_coords(hru_i=("hru", np.arange(len(ds.hru))))
 
-        if load_ds_to_memory:
+        if load_ds_to_memory and not skip_data_init:
             ds.load()  # TODO: Load only needed variables.
 
         edge_index = torch.tensor(
             np.asarray(
-                [[i, j.item()] for i, tgt in enumerate(ds.downstream.values)
-                 if (tgt != -1) and len(j := np.argwhere(ds.hru.values == tgt)) > 0]
+                [
+                    [i, j.item()]
+                    for i, tgt in enumerate(ds.downstream.values)
+                    if (tgt != -1) and len(j := np.argwhere(ds.hru.values == tgt)) > 0
+                ]
             ).T
         )
 
@@ -1165,11 +1161,7 @@ class GraphDataModule(pl.LightningDataModule):
 
         for name, hru in {**train_catchments, **valid_catchments, **test_catchments}.items():
             hru_i = np.argwhere(ds.hru.values == hru).item()
-            subset, _, _, _ = k_hop_subgraph(
-                node_idx=hru_i,
-                num_hops=1000,
-                edge_index=edge_index,
-                directed=True)
+            subset, _, _, _ = k_hop_subgraph(node_idx=hru_i, num_hops=1000, edge_index=edge_index, directed=True)
 
             if name in train_catchments:
                 train_subset_hru_i.append(subset)
@@ -1185,28 +1177,31 @@ class GraphDataModule(pl.LightningDataModule):
         test_subset_hru_i = torch.cat(test_subset_hru_i)
 
         unique_catchments = np.unique(
-            list(train_catchments.values()) + list(valid_catchments.values()) + list(test_catchments.values()))
+            list(train_catchments.values()) + list(valid_catchments.values()) + list(test_catchments.values())
+        )
 
         if use_random_catchments:
             # Find HRUs with observations.
             RandomState = np.random.RandomState(21)
             has_obs = ds.hru.where(
-                ds.Q_obs_mmd.isel(
-                    time=slice(temporal_context_length, None)).notnull().any('time').compute(), drop=True).values
+                ds.Q_obs_mmd.isel(time=slice(temporal_context_length, None)).notnull().any("time").compute(), drop=True
+            ).values
             has_obs = RandomState.permutation(has_obs)
-            train_subset_hru = has_obs[:int(0.6 * len(has_obs))]
-            valid_subset_hru = has_obs[int(0.6 * len(has_obs)):int(0.8 * len(has_obs))]
-            test_subset_hru = has_obs[int(0.8 * len(has_obs)):]
+            train_subset_hru = has_obs[: int(0.6 * len(has_obs))]
+            valid_subset_hru = has_obs[int(0.6 * len(has_obs)) : int(0.8 * len(has_obs))]
+            test_subset_hru = has_obs[int(0.8 * len(has_obs)) :]
 
         else:
-            train_subset_hru_i = torch.stack([
-                hru_i for hru_i in train_subset_hru_i if
-                (hru_i not in valid_subset_hru_i) and (hru_i not in test_subset_hru_i)
-            ])
-            valid_subset_hru_i = torch.stack([
-                hru_i for hru_i in valid_subset_hru_i if
-                (hru_i not in test_subset_hru_i)
-            ])
+            train_subset_hru_i = torch.stack(
+                [
+                    hru_i
+                    for hru_i in train_subset_hru_i
+                    if (hru_i not in valid_subset_hru_i) and (hru_i not in test_subset_hru_i)
+                ]
+            )
+            valid_subset_hru_i = torch.stack(
+                [hru_i for hru_i in valid_subset_hru_i if (hru_i not in test_subset_hru_i)]
+            )
             train_subset_hru = np.unique(ds.hru.isel(hru=train_subset_hru_i).values)
             valid_subset_hru = np.unique(ds.hru.isel(hru=valid_subset_hru_i).values)
             test_subset_hru = np.unique(ds.hru.isel(hru=test_subset_hru_i).values)
@@ -1220,13 +1215,15 @@ class GraphDataModule(pl.LightningDataModule):
         self.train_catchments = train_catchments
         self.valid_catchments = unique_catchments if use_random_catchments else list(valid_catchments.values())
         self.test_catchments = unique_catchments if use_random_catchments else list(test_catchments.values())
-        self.pred_catchments = unique_catchments if aggregate_catchments else ds.hru.where(
-            ds.downstream.load() == -1, drop=True)
+        self.pred_catchments = (
+            unique_catchments if aggregate_catchments else ds.hru.where(ds.downstream.load() == -1, drop=True)
+        )
 
         self.stat_features = stat_features
         self.stat_routing_features = stat_routing_features if stat_routing_features is not None else stat_features
         self.dyn_features = dyn_features
 
+        self.val_time_range = val_time_range
         self.aggregate_catchments = aggregate_catchments
         self.k_hops = k_hops
         self.temporal_context_length = temporal_context_length
@@ -1234,19 +1231,23 @@ class GraphDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
+        if skip_data_init:
+            self.has_obs = None
+            self.norm_args_dyn_features = None
+            self.norm_args_stat_features = None
+            self.norm_args_stat_routing_features = None
+            self.norm_args_targets = None
+            return
+
         # Derive observation HRU mask for all sets.
-        self.has_obs = ds.Q_obs_m3s.notnull().any('time').compute()
+        self.has_obs = ds.Q_obs_m3s.notnull().any("time").compute()
 
         # Get train dataset.
-        train_dataset = self.get_dataset(stage='init')
+        train_dataset = self.get_dataset(stage="init")
 
-        self.norm_args_dyn_features = Normalizer.make_kwargs(
-            ds=train_dataset.ds, norm_variables=self.dyn_features
-        )
+        self.norm_args_dyn_features = Normalizer.make_kwargs(ds=train_dataset.ds, norm_variables=self.dyn_features)
 
-        self.norm_args_stat_features = Normalizer.make_kwargs(
-            ds=train_dataset.ds, norm_variables=self.stat_features
-        )
+        self.norm_args_stat_features = Normalizer.make_kwargs(ds=train_dataset.ds, norm_variables=self.stat_features)
 
         self.norm_args_stat_routing_features = Normalizer.make_kwargs(
             ds=train_dataset.ds, norm_variables=self.stat_routing_features
@@ -1254,11 +1255,12 @@ class GraphDataModule(pl.LightningDataModule):
 
         if norm_targets:
             if aggregate_catchments:
-                targets = ['Q_obs_mmd']
+                targets = ["Q_obs_mmd"]
             else:
-                targets = ['Q_obs_m3s']
+                targets = ["Q_obs_m3s"]
             self.norm_args_targets = LogXp.make_kwargs(
-                ds=train_dataset.ds, norm_variables=targets, target_centering=True, epsilon=1.0, clip_zero=True)
+                ds=train_dataset.ds, norm_variables=targets, target_centering=True, epsilon=1.0, clip_zero=True
+            )
         else:
             self.norm_args_targets = NoNormalizer.make_kwargs()
 
@@ -1285,7 +1287,7 @@ class GraphDataModule(pl.LightningDataModule):
         )
         return subset.cpu().tolist()
 
-    def get_dataset(self, stage: Literal['init', 'train', 'valid', 'test', 'pred']) -> HRUData:
+    def get_dataset(self, stage: Literal["init", "train", "valid", "test", "pred"]) -> HRUData:
         """
         Generate a dataset instance for the specified training or evaluation stage.
 
@@ -1296,31 +1298,35 @@ class GraphDataModule(pl.LightningDataModule):
             HRUData: A dataset configured for the given stage.
         """
 
-        if stage in ['init', 'train']:
+        ds = self.ds
+
+        if stage in ["init", "train"]:
             has_obs = (self.has_obs * self.ds.hru.isin(self.train_hrus)).compute()
             hru_samples = None
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
-        elif stage == 'valid':
+        elif stage == "valid":
+            if self.val_time_range is not None:
+                ds = self.ds.sel(time=slice(*self.val_time_range))
             has_obs = (self.has_obs * self.ds.hru.isin(self.valid_hrus)).compute()
             hru_samples = None if self.aggregate_catchments else self.valid_catchments
             temporal_context_length = -1
             prediction_length = -1
-        elif stage == 'test':
+        elif stage == "test":
             has_obs = (self.has_obs * self.ds.hru.isin(self.test_hrus)).compute()
             hru_samples = None if self.aggregate_catchments else self.test_catchments
             temporal_context_length = -1
             prediction_length = -1
-        elif stage == 'pred':
+        elif stage == "pred":
             has_obs = self.has_obs
             hru_samples = None if self.aggregate_catchments else self.pred_catchments
             temporal_context_length = -1
             prediction_length = -1
         else:
-            raise ValueError(f'Unknown stage: `{stage}`.')
+            raise ValueError(f"Unknown stage: `{stage}`.")
 
         return HRUData(
-            ds=self.ds,
+            ds=ds,
             obs_mask=has_obs,
             stat_features=self.stat_features,
             stat_routing_features=self.stat_routing_features,
@@ -1340,7 +1346,7 @@ class GraphDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the training dataset.
         """
 
-        train_dataset = self.get_dataset(stage='train')
+        train_dataset = self.get_dataset(stage="train")
         if self.aggregate_catchments:
             DataloaderClass = DataLoader
         else:
@@ -1351,7 +1357,8 @@ class GraphDataModule(pl.LightningDataModule):
             shuffle=True,
             collate_fn=collate_dataclass,
             num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -1361,7 +1368,7 @@ class GraphDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the validation dataset.
         """
 
-        val_dataset = self.get_dataset(stage='valid')
+        val_dataset = self.get_dataset(stage="valid")
         if self.aggregate_catchments:
             DataloaderClass = DataLoader
         else:
@@ -1372,7 +1379,8 @@ class GraphDataModule(pl.LightningDataModule):
             shuffle=False,
             collate_fn=collate_dataclass,
             num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -1382,7 +1390,7 @@ class GraphDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the test dataset.
         """
 
-        test_dataset = self.get_dataset(stage='test')
+        test_dataset = self.get_dataset(stage="test")
         if self.aggregate_catchments:
             DataloaderClass = DataLoader
         else:
@@ -1393,7 +1401,8 @@ class GraphDataModule(pl.LightningDataModule):
             shuffle=False,
             collate_fn=collate_dataclass,
             num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def predict_dataloader(self) -> DataLoader:
         """
@@ -1403,18 +1412,19 @@ class GraphDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the prediction dataset.
         """
 
-        pred_dataset = self.get_dataset(stage='pred')
+        pred_dataset = self.get_dataset(stage="pred")
         if self.aggregate_catchments:
             DataloaderClass = DataLoader
         else:
             DataloaderClass = TGDataLoader
         return DataloaderClass(
             dataset=pred_dataset,
-            batch_size=self.batch_size,
+            batch_size=1,
             shuffle=False,
             collate_fn=collate_dataclass,
-            num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            num_workers=0,
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     @property
     def num_stat_features(self) -> int:
@@ -1542,25 +1552,21 @@ class HRUDataModule(pl.LightningDataModule):
 
         self.stat_features = stat_features
         self.dyn_features = dyn_features
-        self.targets = ['q_prevah_mmd']
+        self.targets = ["q_prevah_mmd"]
 
         self.temporal_context_length = temporal_context_length
         self.prediction_length = prediction_length
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        self.has_obs = self.ds.q_prevah_mmd.notnull().any('time').compute()
+        self.has_obs = self.ds.q_prevah_mmd.notnull().any("time").compute()
 
         # Get train dataset.
-        train_dataset = self.get_dataset(stage='init')
+        train_dataset = self.get_dataset(stage="init")
 
-        self.norm_args_dyn_features = Normalizer.make_kwargs(
-            ds=train_dataset.ds, norm_variables=self.dyn_features
-        )
+        self.norm_args_dyn_features = Normalizer.make_kwargs(ds=train_dataset.ds, norm_variables=self.dyn_features)
 
-        self.norm_args_stat_features = Normalizer.make_kwargs(
-            ds=train_dataset.ds, norm_variables=self.stat_features
-        )
+        self.norm_args_stat_features = Normalizer.make_kwargs(ds=train_dataset.ds, norm_variables=self.stat_features)
 
         if norm_targets:
             self.norm_args_targets = Normalizer.make_kwargs(
@@ -1571,11 +1577,12 @@ class HRUDataModule(pl.LightningDataModule):
 
         if norm_targets:
             self.norm_args_targets = LogXp.make_kwargs(
-                ds=train_dataset.ds, norm_variables=self.targets, target_centering=True, epsilon=1.0, clip_zero=True)
+                ds=train_dataset.ds, norm_variables=self.targets, target_centering=True, epsilon=1.0, clip_zero=True
+            )
         else:
             self.norm_args_targets = NoNormalizer.make_kwargs()
 
-    def get_dataset(self, stage: Literal['init', 'train', 'valid', 'test', 'pred']) -> HRUData:
+    def get_dataset(self, stage: Literal["init", "train", "valid", "test", "pred"]) -> HRUData:
         """
         Get the HRU dataset for a given stage.
 
@@ -1588,28 +1595,28 @@ class HRUDataModule(pl.LightningDataModule):
             HRUData: A dataset object configured for the specific stage.
         """
 
-        if stage in ['init', 'train']:
+        if stage in ["init", "train"]:
             ds = self.ds.sel(hru=self.train_hrus)
             has_obs = self.has_obs.sel(hru=self.train_hrus)
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
-        elif stage == 'valid':
+        elif stage == "valid":
             ds = self.ds.sel(hru=self.valid_hrus)
             has_obs = self.has_obs.sel(hru=self.valid_hrus)
             temporal_context_length = -1
             prediction_length = -1
-        elif stage == 'test':
+        elif stage == "test":
             ds = self.ds.sel(hru=self.test_hrus)
             has_obs = self.has_obs.sel(hru=self.test_hrus)
             temporal_context_length = -1
             prediction_length = -1
-        elif stage == 'pred':
+        elif stage == "pred":
             ds = self.ds.sel(hru=self.pred_hrus)
             has_obs = self.has_obs.sel(hru=self.pred_hrus)
             temporal_context_length = -1
             prediction_length = -1
         else:
-            raise ValueError(f'Unknown stage: `{stage}`.')
+            raise ValueError(f"Unknown stage: `{stage}`.")
 
         return HRUData(
             ds=ds,
@@ -1619,7 +1626,7 @@ class HRUDataModule(pl.LightningDataModule):
             temporal_context_length=temporal_context_length,
             use_prevah=True,
             prediction_length=prediction_length,
-            aggregate_catchments=False
+            aggregate_catchments=False,
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -1630,11 +1637,15 @@ class HRUDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the training dataset.
         """
 
-        train_dataset = self.get_dataset(stage='train')
+        train_dataset = self.get_dataset(stage="train")
         return DataLoader(
-            dataset=train_dataset, batch_size=self.batch_size, shuffle=True,
-            collate_fn=collate_dataclass, num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            dataset=train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=collate_dataclass,
+            num_workers=self.num_workers,
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def val_dataloader(self) -> DataLoader:
         """
@@ -1644,11 +1655,15 @@ class HRUDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the validation dataset.
         """
 
-        val_dataset = self.get_dataset(stage='valid')
+        val_dataset = self.get_dataset(stage="valid")
         return DataLoader(
-            dataset=val_dataset, batch_size=self.batch_size, shuffle=False,
-            collate_fn=collate_dataclass, num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            dataset=val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=collate_dataclass,
+            num_workers=self.num_workers,
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def test_dataloader(self) -> DataLoader:
         """
@@ -1658,11 +1673,15 @@ class HRUDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the test dataset.
         """
 
-        test_dataset = self.get_dataset(stage='test')
+        test_dataset = self.get_dataset(stage="test")
         return DataLoader(
-            dataset=test_dataset, batch_size=self.batch_size, shuffle=False,
-            collate_fn=collate_dataclass, num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            dataset=test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=collate_dataclass,
+            num_workers=self.num_workers,
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     def predict_dataloader(self) -> DataLoader:
         """
@@ -1672,11 +1691,15 @@ class HRUDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the prediction dataset.
         """
 
-        pred_dataset = self.get_dataset(stage='pred')
+        pred_dataset = self.get_dataset(stage="pred")
         return DataLoader(
-            dataset=pred_dataset, batch_size=self.batch_size, shuffle=False,
-            collate_fn=collate_dataclass, num_workers=self.num_workers,
-            worker_init_fn=suppress_sparse_csc_warning)
+            dataset=pred_dataset,
+            batch_size=1,
+            shuffle=False,
+            collate_fn=collate_dataclass,
+            num_workers=0,
+            worker_init_fn=suppress_sparse_csc_warning,
+        )
 
     @property
     def num_stat_features(self) -> int:

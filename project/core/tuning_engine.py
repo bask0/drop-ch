@@ -15,13 +15,15 @@ This module defines the `TuningEngine` class and associated helpers for:
 
 import logging
 import os
-from os import PathLike
-from pathlib import Path
 import shutil
+import signal
 import sys
 import time
-from typing import TYPE_CHECKING, Literal
 import warnings
+from os import PathLike
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
 import optuna
 from optuna_integration.pytorch_lightning import PyTorchLightningPruningCallback
 
@@ -39,19 +41,37 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("lightning.pytorch")
 
+
+class SlurmTimeLimitError(Exception):
+    """Raised when SLURM sends SIGTERM to signal the job time limit has been reached."""
+
+
+def _setup_sigterm_handler() -> None:
+    """Replace the default SIGTERM handler with one that raises SlurmTimeLimitError.
+
+    SLURM sends SIGTERM at the time limit (propagated via srun), then SIGKILL after
+    KillWait (~30 s). Raising here lets the exception bubble through trainer.fit() so
+    Optuna's _run_trial catches it, marks the trial as FAILED, and we have time to
+    write to the DB before the hard kill arrives.
+    """
+
+    def handler(_signum, _frame):
+        raise SlurmTimeLimitError("SLURM time limit reached.")
+
+    signal.signal(signal.SIGTERM, handler)
+
+
 # Suppress known warnings for cleaner output
+warnings.filterwarnings("ignore", message="LightningCLI's args parameter is intended")
+warnings.filterwarnings("ignore", message="The 'val_dataloader' does not have many workers which may be a bottleneck.")
 warnings.filterwarnings(
-    "ignore", message="LightningCLI's args parameter is intended")
+    "ignore", message="The 'train_dataloader' does not have many workers which may be a bottleneck."
+)
+warnings.filterwarnings("ignore", message="The 'test_dataloader' does not have many workers which may be a bottleneck.")
 warnings.filterwarnings(
-    "ignore", message="The 'val_dataloader' does not have many workers which may be a bottleneck.")
-warnings.filterwarnings(
-    "ignore", message="The 'train_dataloader' does not have many workers which may be a bottleneck.")
-warnings.filterwarnings(
-    "ignore", message="The 'test_dataloader' does not have many workers which may be a bottleneck.")
-warnings.filterwarnings(
-    "ignore", message="The 'prediction_dataloader' does not have many workers which may be a bottleneck.")
-warnings.filterwarnings(
-    "ignore", message="Argument ``multivariate`` is an experimental feature.")
+    "ignore", message="The 'prediction_dataloader' does not have many workers which may be a bottleneck."
+)
+warnings.filterwarnings("ignore", message="Argument ``multivariate`` is an experimental feature.")
 
 TYPE_MAP = {
     "int": int,
@@ -106,19 +126,19 @@ class TuningEngine:
     EXPERIMENT_NAME = "experiment"
 
     def __init__(
-            self,
-            sampler: optuna.samplers.BaseSampler,
-            pruner: optuna.pruners.BasePruner,
-            search_space: dict,
-            exp_dir: PathLike | str,
-            log_dir: PathLike | str,
-            n_trials: int = 10,
-            num_folds: int | None = None,
-            monitor: str = 'val_loss',
-            skip_tuning: bool = False,
-            overwrite: bool = False,
-            resume: bool = False,
-            profile: bool = False,
+        self,
+        sampler: optuna.samplers.BaseSampler,
+        pruner: optuna.pruners.BasePruner,
+        search_space: dict,
+        exp_dir: PathLike | str,
+        log_dir: PathLike | str,
+        n_trials: int = 10,
+        num_folds: int | None = None,
+        monitor: str = "val_loss",
+        skip_tuning: bool = False,
+        overwrite: bool = False,
+        resume: bool = False,
+        profile: bool = False,
     ) -> None:
         """
         Initialize the TuningEngine with the specified configuration.
@@ -206,7 +226,7 @@ class TuningEngine:
             RuntimeError: If the tuning study cannot be loaded or if the configuration file does not exist.
         """
 
-        best_config_path = self.best_trial_dir / 'config.yaml'
+        best_config_path = self.best_trial_dir / "config.yaml"
 
         if not best_config_path.exists():
             raise RuntimeError(f"Best trial configuration does not exist: {best_config_path}.")
@@ -225,7 +245,7 @@ class TuningEngine:
             RuntimeError: If the tuning study cannot be loaded or if the checkpoint file does not exist.
         """
 
-        best_checkpoint_path = self.best_trial_dir / 'checkpoints' / 'best.ckpt'
+        best_checkpoint_path = self.best_trial_dir / "checkpoints" / "best.ckpt"
 
         if not best_checkpoint_path.exists():
             raise RuntimeError(f"Best trial checkpoint does not exist: {best_checkpoint_path}.")
@@ -264,16 +284,11 @@ class TuningEngine:
         if which in ("all", "tune"):
             if self.resume:
                 if not self.tune_db.exists():
-                    raise FileNotFoundError(
-                        f"Cannot resume tuning; database does not exist: {self.tune_db}"
-                    )
+                    raise FileNotFoundError(f"Cannot resume tuning; database does not exist: {self.tune_db}")
                 if not self.tune_dir.exists():
-                    raise FileNotFoundError(
-                        f"Tuning directory does not exist: {self.tune_dir}"
-                    )
+                    raise FileNotFoundError(f"Tuning directory does not exist: {self.tune_dir}")
 
                 logger.info("Resuming optuna tuning from existing database.")
-                return
 
             else:
                 self._create_dirs_if_needed(self.tune_dir, remove=True)
@@ -282,16 +297,11 @@ class TuningEngine:
         if which in ("all", "xval"):
             if self.resume:
                 if not self.xval_db.exists():
-                    raise FileNotFoundError(
-                        f"Cannot resume cross validation; database does not exist: {self.xval_db}"
-                    )
+                    raise FileNotFoundError(f"Cannot resume cross validation; database does not exist: {self.xval_db}")
                 if not self.xval_dir.exists():
-                    raise FileNotFoundError(
-                        f"Cross validation directory does not exist: {self.xval_dir}"
-                    )
+                    raise FileNotFoundError(f"Cross validation directory does not exist: {self.xval_dir}")
 
                 logger.info("Resuming optuna cross validation from existing database.")
-                return
 
             else:
                 self._create_dirs_if_needed(self.xval_dir, remove=True)
@@ -312,6 +322,7 @@ class TuningEngine:
         """
 
         self.redirect_console_to_file(log_dir=self.tune_dir)
+        _setup_sigterm_handler()
 
         if self.skip_tuning:
             logger.info("Skipping tuning as skip_tuning is enabled.")
@@ -321,9 +332,19 @@ class TuningEngine:
             )
 
         study = None
+        n_trials_before = len(
+            optuna.load_study(
+                study_name=self.EXPERIMENT_NAME,
+                storage=self._get_storage(db_path=self.tune_db),
+            ).trials
+        )
 
         try:
             study = self.run(is_tune=True)
+
+        except SlurmTimeLimitError:
+            logger.warning("SLURM time limit reached — trial marked as FAILED by Optuna. Exiting.")
+            sys.exit(0)
 
         except (KeyboardInterrupt, SystemExit):
             logger.warning("Tuning interrupted by user. Attempting graceful shutdown...")
@@ -333,16 +354,17 @@ class TuningEngine:
                     study_name=self.EXPERIMENT_NAME,
                     storage=self._get_storage(db_path=self.tune_db),
                 )
-            except Exception as e:
-                logger.error("Graceful shutdown failed. Cannot load interrupted tuning results.")
-                raise e
+            except Exception:
+                logger.exception("Graceful shutdown failed. Cannot load interrupted tuning results.")
+                raise
 
         finally:
             if study is None:
                 raise ValueError("No study was created or loaded. Cannot proceed with finalizing runing.")
 
-            logger.info(f"Creating summary plots in '{self.tune_dir}'...")
-            plot_optuna_summary(self.tune_db, study_name=self.EXPERIMENT_NAME, is_xval=False)
+            if len(study.trials) > n_trials_before:
+                logger.info(f"Creating summary plots in '{self.tune_dir}'...")
+                plot_optuna_summary(self.tune_db, study_name=self.EXPERIMENT_NAME, is_xval=False)
 
         return study
 
@@ -397,7 +419,8 @@ class TuningEngine:
                     states=(
                         optuna.trial.TrialState.COMPLETE,
                         optuna.trial.TrialState.PRUNED,
-                        optuna.trial.TrialState.RUNNING),
+                        optuna.trial.TrialState.RUNNING,
+                    ),
                 ),
             ]
         else:
@@ -413,6 +436,24 @@ class TuningEngine:
             pruner=pruner,
         )
 
+        if is_tune:
+            n_existing = len(
+                [
+                    t
+                    for t in study.trials
+                    if t.state
+                    in (
+                        optuna.trial.TrialState.COMPLETE,
+                        optuna.trial.TrialState.PRUNED,
+                        optuna.trial.TrialState.RUNNING,
+                    )
+                ]
+            )
+            if n_existing >= self.n_trials:
+                msg = f"All {self.n_trials} trials already completed or running. Exiting early."
+                logger.info(msg)
+                return study
+
         study.optimize(
             func=lambda trial: self.objective(trial, is_tune, use_best_tuning_checkpoint),
             n_trials=self.n_trials if is_tune else self.num_folds,
@@ -426,7 +467,7 @@ class TuningEngine:
 
         return study
 
-    def objective(self, trial: 'Trial', is_tune: bool, use_best_tuning_checkpoint: bool = False) -> float:
+    def objective(self, trial: "Trial", is_tune: bool, use_best_tuning_checkpoint: bool = False) -> float:
         """
         Objective function for Optuna hyperparameter optimization or cross-validation.
 
@@ -467,16 +508,20 @@ class TuningEngine:
         if not is_tune:
             config_files = [self.best_config_path]
 
-        args = [
-            "--trainer.logger.class_path=lightning.pytorch.loggers.TensorBoardLogger",
-            f"--trainer.logger.save_dir={self.tune_dir if is_tune else self.xval_dir}",
-            f"--trainer.logger.version={version}",
-            "--trainer.logger.name=",
-        ] + cli_args + sample_args
+        args = (
+            [
+                "--trainer.logger.class_path=lightning.pytorch.loggers.TensorBoardLogger",
+                f"--trainer.logger.save_dir={self.tune_dir if is_tune else self.xval_dir}",
+                f"--trainer.logger.version={version}",
+                "--trainer.logger.name=",
+            ]
+            + cli_args
+            + sample_args
+        )
 
         if is_tune:
             trainer_defaults = {
-                'callbacks': [
+                "callbacks": [
                     PyTorchLightningPruningCallback(trial=trial, monitor=self.monitor),
                 ],
             }
@@ -485,14 +530,11 @@ class TuningEngine:
 
         # Combine base config paths and overrides for LightningCLI
         cli = CLI(
-            parser_kwargs=dict(
-                default_config_files=config_files,
-                parser_mode="omegaconf"
-            ),
+            parser_kwargs=dict(default_config_files=config_files, parser_mode="omegaconf"),
             save_config_kwargs={"overwrite": True},
             trainer_defaults=trainer_defaults,
             # Pass hyperparameters as CLI overrides
-            args=args
+            args=args,
         )
 
         if self.profile:
@@ -531,14 +573,11 @@ class TuningEngine:
         trial.set_user_attr("epoch", cli.trainer.current_epoch)
 
         if not is_tune:
-            model = type(cli.model).load_from_checkpoint(
-                best_checkpoint,
-                runoff_net_exp_dir='/cluster/work/climate/kraftb/runs/pretraining/')  # TODO: delete
-            cli.trainer.predict(model=model, datamodule=cli.datamodule)
+            cli.trainer.predict(model=cli.model, datamodule=cli.datamodule, ckpt_path=str(best_checkpoint))
 
         return val_loss
 
-    def sample_parameters(self, trial: 'Trial') -> list[str]:
+    def sample_parameters(self, trial: "Trial") -> list[str]:
         """
         Sample parameters from the defined search space using the provided Optuna trial object.
 
@@ -588,12 +627,12 @@ class TuningEngine:
         for key, spec in self.search_space.items():
             suggestion_method = spec["method"]
 
-            if suggestion_method == 'categorical':
+            if suggestion_method == "categorical":
                 if "dtype" not in spec:
                     raise ValueError(f"Missing 'dtype' for categorical search space: {key}")
                 cast_fn = TYPE_MAP[spec["dtype"]]
                 val = trial.suggest_categorical(key, [cast_fn(val) for val in spec["choices"]])
-            elif suggestion_method == 'float':
+            elif suggestion_method == "float":
                 kwargs = {
                     "low": float(spec["low"]),
                     "high": float(spec["high"]),
@@ -601,7 +640,7 @@ class TuningEngine:
                     "step": spec.get("step", None),
                 }
                 val = trial.suggest_float(key, **kwargs)
-            elif suggestion_method == 'int':
+            elif suggestion_method == "int":
                 kwargs = {
                     "low": spec["low"],
                     "high": spec["high"],
@@ -612,11 +651,11 @@ class TuningEngine:
             else:
                 raise ValueError(f"Unsupported suggestion method: {suggestion_method}.")
 
-            suggested_params.append(f'--{key}={val}')
+            suggested_params.append(f"--{key}={val}")
 
         return suggested_params
 
-    def xval_parameters(self, trial: 'Trial') -> list[str]:
+    def xval_parameters(self, trial: "Trial") -> list[str]:
         """
         Suggests the cross-validation fold index for the current trial and formats it as a CLI argument.
 
@@ -632,9 +671,9 @@ class TuningEngine:
         """
 
         val = trial.suggest_int("fold_idx", 0, self.num_folds - 1)
-        return [f'--data.init_args.fold_idx={val}']
+        return [f"--data.init_args.fold_idx={val}"]
 
-    def _add_user_attrs(self, study: 'Study') -> None:
+    def _add_user_attrs(self, study: "Study") -> None:
         """
         Add user attributes to the Optuna study.
 
@@ -642,13 +681,11 @@ class TuningEngine:
             study (Study): The Optuna trial object to which attributes will be added.
             **kwargs: Key-value pairs of attributes to add to the trial.
         """
+
         def to_plain(v):
             return str(v) if isinstance(v, Path) else v
 
-        names = [
-            'exp_dir', 'log_dir', 'num_folds', 'monitor',
-            'tune_dir', 'tune_db', 'xval_dir', 'xval_db'
-        ]
+        names = ["exp_dir", "log_dir", "num_folds", "monitor", "tune_dir", "tune_db", "xval_dir", "xval_db"]
 
         for name in names:
             study.set_user_attr(key=name, value=to_plain(getattr(self, name)))
@@ -705,7 +742,7 @@ class TuningEngine:
         """
 
         return optuna.storages.RDBStorage(
-            url=f"sqlite:///{db_path.resolve()}",
+            url=f"sqlite:///{db_path.resolve()}?timeout=60",
             **kwargs,
         )
 
@@ -816,7 +853,7 @@ class TuningEngine:
         target.symlink_to(source, target_is_directory=source.is_dir())
         logging.info(f"Created symlink: {target} → {source}")
 
-    def _flatten_dict(self, d: dict, parent_key: str = '', sep: str = '.') -> dict[str, dict]:
+    def _flatten_dict(self, d: dict, parent_key: str = "", sep: str = ".") -> dict[str, dict]:
         """
         Recursively flattens a nested dictionary, concatenating keys with a separator.
 

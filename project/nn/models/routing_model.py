@@ -121,7 +121,7 @@ class RoutingModel(torch.nn.Module):
             subset: Tensor | None = None,
             is_boundary: bool = False,
             return_diagnostics: bool = False
-    ) -> tuple[Tensor, Tensor, Tensor, SparseTensor, SparseTensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor | None, Tensor, SparseTensor, SparseTensor, Tensor, Tensor]:
         """Simulate routing process for a batch of streamflow data using the network's temporal and spatial encoding.
 
         Args:
@@ -132,12 +132,12 @@ class RoutingModel(torch.nn.Module):
                 Required if `is_boundary` is True.
             is_boundary (bool, optional): If True, applies boundary conditions by zeroing out `q` and `e`
                 at `subset` indices.
-            return_diagnostics (bool, optional): If True, returns additional diagnostic information (retention values).
+            return_diagnostics (bool, optional): If True, returns S_store and R_store; otherwise both are None/ones(1).
 
         Returns:
             tuple:
                 Q_store (Tensor): Predicted streamflow for each timestep, shape (batch_size, seq_length, enc_size).
-                S_store (Tensor): Updated state for each timestep, shape (batch_size, seq_length, enc_size).
+                S_store (Tensor | None): Updated state for each timestep (only when return_diagnostics=True).
                 R_store (Tensor): Retention diagnostics (if requested), shape (batch_size, seq_length) or (1,)
                     if not requested.
                 T (SparseTensor): Routing transformation matrix.
@@ -163,7 +163,8 @@ class RoutingModel(torch.nn.Module):
         # Initialize storage tensors.
         St = torch.zeros_like(batch.y[:, 0, :])
         Q_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
-        S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
+        S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype) \
+            if return_diagnostics else None
 
         # Initialize diagnostic storage if requested.
         if return_diagnostics:
@@ -225,7 +226,8 @@ class RoutingModel(torch.nn.Module):
                 Qt = D @ S_plus_q_t
 
                 # Store results.
-                S_store[:, inner_t, :] = St
+                if S_store is not None:
+                    S_store[:, inner_t, :] = St
                 Q_store[:, inner_t, :] = Qt
 
                 retention_prev = x_retention
@@ -233,7 +235,8 @@ class RoutingModel(torch.nn.Module):
                     R_store[:, inner_t, 0] = x_retention
 
         # Remove subtime dimension by averaging state and summing flow.
-        S_store = S_store.view(batch_size, -1, self.num_time_subseteps, 1).mean(dim=2)
+        if S_store is not None:
+            S_store = S_store.view(batch_size, -1, self.num_time_subseteps, 1).mean(dim=2)
         Q_store = Q_store.view(batch_size, -1, self.num_time_subseteps, 1).sum(dim=2)
         if return_diagnostics:
             R_store = R_store.view(batch_size, -1, self.num_time_subseteps, 1).mean(dim=2)

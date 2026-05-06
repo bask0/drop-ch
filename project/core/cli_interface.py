@@ -26,17 +26,18 @@ Typical usage:
 
 import importlib
 import warnings
-from jsonargparse import namespace_to_dict
+
 import lightning.pytorch as pl
+import optuna
+from jsonargparse import namespace_to_dict
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
-import optuna
 
 from .utils import PredictionWriter
 
 # Ignore anticipated PL warnings.
-warnings.filterwarnings('ignore', '.*infer the indices fetched for your dataloader.*')
-warnings.filterwarnings('ignore', '.*You requested to overfit.*')
+warnings.filterwarnings("ignore", ".*infer the indices fetched for your dataloader.*")
+warnings.filterwarnings("ignore", ".*You requested to overfit.*")
 
 
 class CLI(LightningCLI):
@@ -71,7 +72,7 @@ class CLI(LightningCLI):
             run=False,
             subclass_mode_model=True,
             subclass_mode_data=True,
-            **kwargs
+            **kwargs,
         )
 
     def add_arguments_to_parser(self, parser):
@@ -95,59 +96,60 @@ class CLI(LightningCLI):
         from project.core.tuning_engine import TuningEngine
 
         # Register the tuning_engine argument block
-        parser.add_class_arguments(
-            TuningEngine,
-            "tuning_engine"
-        )
+        parser.add_class_arguments(TuningEngine, "tuning_engine")
 
         parser.link_arguments(source="data.init_args.num_folds", target="tuning_engine.num_folds")
 
         # Forced callbacks
         parser.add_lightning_class_args(EarlyStopping, "early_stopping_callback")
         parser.link_arguments(source="tuning_engine.monitor", target="early_stopping_callback.monitor")
-        parser.set_defaults({
-            "early_stopping_callback.patience": 10,
-            "early_stopping_callback.mode": 'min',
-            "early_stopping_callback.min_delta": 0.0,
-            "early_stopping_callback.check_finite": True,
-        })
+        parser.set_defaults(
+            {
+                "early_stopping_callback.patience": 40,
+                "early_stopping_callback.mode": "min",
+                "early_stopping_callback.min_delta": 0.0,
+                "early_stopping_callback.check_finite": True,
+            }
+        )
         parser.add_lightning_class_args(ModelCheckpoint, "checkpoint_callback")
         parser.link_arguments(source="tuning_engine.monitor", target="checkpoint_callback.monitor")
-        parser.set_defaults({
-            "checkpoint_callback.mode": 'min',
-            "checkpoint_callback.save_last": True,
-            "checkpoint_callback.save_top_k": 1,
-            "checkpoint_callback.filename": "best",
-        })
+        parser.set_defaults(
+            {
+                "checkpoint_callback.mode": "min",
+                "checkpoint_callback.save_last": True,
+                "checkpoint_callback.save_top_k": 1,
+                "checkpoint_callback.filename": "best",
+            }
+        )
         parser.add_lightning_class_args(PredictionWriter, "prediction_writer")
-        parser.set_defaults({
-            "prediction_writer.write_all_variables": False,
-        })
+        parser.set_defaults(
+            {
+                "prediction_writer.write_all_variables": False,
+            }
+        )
 
         # ---------- Custom configuration ----------
         # Link input dimensionality
+        parser.link_arguments("data.num_stat_features", "model.init_args.num_stat_features", apply_on="instantiate")
         parser.link_arguments(
-            'data.num_stat_features', 'model.init_args.num_static_in', apply_on='instantiate')
-        parser.link_arguments(
-            'data.num_stat_routing_features', 'model.init_args.num_stat_routing_features', apply_on='instantiate')
-        parser.link_arguments(
-            'data.num_dyn_features', 'model.init_args.num_dynamic_in', apply_on='instantiate')
-        parser.link_arguments(
-            'data.prediction_length', 'model.init_args.prediction_length', apply_on='instantiate')
+            "data.num_stat_routing_features", "model.init_args.num_stat_routing_features", apply_on="instantiate"
+        )
+        parser.link_arguments("data.num_dyn_features", "model.init_args.num_dynamic_features", apply_on="instantiate")
+        parser.link_arguments("data.prediction_length", "model.init_args.prediction_length", apply_on="instantiate")
 
         # Link normalization arguments
         parser.link_arguments(
-            'data.norm_args_stat_features', 'model.init_args.norm_args_stat_features',
-            apply_on='instantiate')
+            "data.norm_args_stat_features", "model.init_args.norm_args_stat_features", apply_on="instantiate"
+        )
         parser.link_arguments(
-            'data.norm_args_stat_routing_features', 'model.init_args.norm_args_stat_routing_features',
-            apply_on='instantiate')
+            "data.norm_args_stat_routing_features",
+            "model.init_args.norm_args_stat_routing_features",
+            apply_on="instantiate",
+        )
         parser.link_arguments(
-            'data.norm_args_dyn_features', 'model.init_args.norm_args_dyn_features',
-            apply_on='instantiate')
-        parser.link_arguments(
-            'data.norm_args_targets', 'model.init_args.norm_args_targets',
-            apply_on='instantiate')
+            "data.norm_args_dyn_features", "model.init_args.norm_args_dyn_features", apply_on="instantiate"
+        )
+        parser.link_arguments("data.norm_args_targets", "model.init_args.norm_args_targets", apply_on="instantiate")
 
     def before_instantiate_classes(self):
         """
@@ -183,11 +185,7 @@ class CLI(LightningCLI):
         sampler: optuna.samplers.BaseSampler = self.class_instantiate(sampler_cfg)
         pruner: optuna.pruners.BasePruner = self.class_instantiate(pruner_cfg)
 
-        self.tuning_engine = TuningEngine(
-            sampler=sampler,
-            pruner=pruner,
-            **tuner_cfg
-        )
+        self.tuning_engine = TuningEngine(sampler=sampler, pruner=pruner, **tuner_cfg)
 
     def class_instantiate(self, cfg):
         """

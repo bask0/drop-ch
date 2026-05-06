@@ -139,6 +139,7 @@ def load_hillshade(
         hillshade_dir: str | Path,
         hrus: gpd.GeoDataFrame,
         ds: xr.Dataset,
+        dem_path: str | Path,
         use_terrain: bool = False,
         use_slope_for_lake_mask: bool = True,
         lake_rgb: tuple[int, int, int] | None = None,
@@ -150,6 +151,7 @@ def load_hillshade(
         hillshade_path: Path to Zarr file to load/store hillshade.
         hrus: GeoDataFrame with HRU polygons.
         ds: Dataset with HRU IDs and lake mask.
+        dem_path: Path to DEM.
         use_terrain: If True, mix in terrain colors.
         use_slope_for_lake_mask: If True, use slope from DEM to identify lakes.
         lake_rgb: RGB color for lakes (0-255). if None, default blue (174, 216, 229) is used. Passing forces
@@ -165,6 +167,8 @@ def load_hillshade(
     if not hillshade_dir.exists():
         FileNotFoundError(f'Hillshade directory {hillshade_dir} does not exist.')
 
+    dem_path = Path(dem_path)
+    
     if use_terrain:
         hillshade_path = hillshade_dir / 'hillshade_with_terrain.zarr'
     else:
@@ -178,7 +182,7 @@ def load_hillshade(
     if not force_recompute and Path(hillshade_path).exists():
         return xr.open_zarr(hillshade_path).hs
 
-    dem = xr.open_dataset('/net/argon/landclim_nobackup/kraftb/data/merit/merit.zarr').rio.write_crs('EPSG:4326')
+    dem = xr.open_dataset(dem_path).rio.write_crs('EPSG:4326')
 
     dem.rio.set_spatial_dims(x_dim='lon', y_dim='lat', inplace=True)
 

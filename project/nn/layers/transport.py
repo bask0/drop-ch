@@ -1,6 +1,8 @@
 """Defines the transport (routing) layers."""
 
+import math
 from typing import cast
+
 import torch
 from torch import Tensor
 from torch_geometric.data import Batch
@@ -58,19 +60,23 @@ class TransportNet(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            node_feature_size: int,
-            hidden_size: int,
-            dynamic: bool = False,
-            retention_mix_factor: float = 0.9,
-            norm_args_stat_routing_features: dict | None = None,
-            *kwargs):
+        self,
+        node_feature_size: int,
+        hidden_size: int,
+        dynamic: bool = False,
+        initial_retention: float = 0.05,
+        retention_mix_factor: float = 0.9,
+        norm_args_stat_routing_features: dict | None = None,
+        *kwargs,
+    ):
         """Initialize the transport layer.
 
         Args:
             node_feature_size (int): Size of the input node features.
             hidden_size (int): Size of the hidden layer.
             dynamic (bool, optional): If True, enables dynamic modulation. Defaults to False.
+            initial_retention (float, optional): Initial retention bias where mean retention lands.
+                Defaults to 0.05.
             retention_mix_factor (float, optional): Mixing factor for retention. Defaults to 0.9.
             norm_args_stat_routing_features: Normalization arguments for static features. Default is None.
             *kwargs: Additional keyword arguments passed to the superclass.
@@ -88,20 +94,18 @@ class TransportNet(torch.nn.Module):
         )
 
         # Encode node features.
-        self.x_enc_0 = torch.nn.Linear(
-            in_features=node_feature_size,
-            out_features=self.hidden_size
-        )
+        self.x_enc_0 = torch.nn.Linear(in_features=node_feature_size, out_features=self.hidden_size)
         self.act_0 = torch.nn.LeakyReLU()
 
-        final_act = torch.nn.Sigmoid()
-
         if self.dynamic:
-            self.dynamic_modulation = torch.nn.Linear(in_features=1, out_features=self.hidden_size)
+            self.dynamic_modulation = torch.nn.Linear(in_features=1, out_features=2 * self.hidden_size)
+
+        linear_out = torch.nn.Linear(in_features=self.hidden_size, out_features=1)
+        torch.nn.init.constant_(linear_out.bias, math.log(initial_retention / (1 - initial_retention)))
         self.final_transform = torch.nn.Sequential(
             torch.nn.LeakyReLU(),
-            torch.nn.Linear(in_features=self.hidden_size, out_features=1),
-            final_act
+            linear_out,
+            torch.nn.Sigmoid(),
         )
 
     def spatial_encode(self, batch: Batch, subset: Tensor | None = None) -> tuple[Tensor, DownstreamAligner]:
@@ -112,7 +116,7 @@ class TransportNet(torch.nn.Module):
             subset (Tensor, optional): A tensor specifying a subset of nodes to encode. If None, all nodes are used.
 
         Returns:
-            tuple[Tensor, DownstreamAligner]: 
+            tuple[Tensor, DownstreamAligner]:
                 - The encoded spatial features as a tensor.
                 - A DownstreamAligner instance for aligning downstream computations.
         """
@@ -142,23 +146,19 @@ class TransportNet(torch.nn.Module):
             Tensor: The dynamically encoded tensor.
         """
 
-        # alpha, beta = torch.nn.functional.tanh(
-        #     self.dynamic_modulation(d)).split(self.hidden_size, -1)
-
-        # x_enc = (1 + alpha * d) * x_enc + beta * d
-
         d_transformed = torch.log(1e-7 + d) + 5.0
-        d_enc = self.dynamic_modulation(d_transformed)
-        x_enc = x_enc + d_enc
+        gamma, beta = self.dynamic_modulation(d_transformed).chunk(2, dim=-1)
+        x_enc = x_enc * (1 + gamma) + beta
 
         return x_enc
 
     def forward(
-            self,
-            x_enc: Tensor,
-            downstream_aligner: DownstreamAligner,
-            d: Tensor | None = None,
-            retention_prev: Tensor | None = None) -> tuple[SparseTensor, SparseTensor, Tensor, Tensor]:
+        self,
+        x_enc: Tensor,
+        downstream_aligner: DownstreamAligner,
+        d: Tensor | None = None,
+        retention_prev: Tensor | None = None,
+    ) -> tuple[SparseTensor, SparseTensor, Tensor, Tensor]:
         """Perform the forward pass for the transport layer.
 
         Args:
@@ -181,19 +181,18 @@ class TransportNet(torch.nn.Module):
 
         if self.dynamic:
             if d is None:
-                raise ValueError('Dynamic encoding is enabled, but no dynamic input `d` was provided.')
+                raise ValueError("Dynamic encoding is enabled, but no dynamic input `d` was provided.")
             x_enc = self.dynamic_encode(x_enc=x_enc, d=d)
 
         retention = self.final_transform(x_enc)
 
         if (d is None) != (retention_prev is None):
-            raise ValueError(
-                'Either both `d` and `retention_prev` must be provided or neither.'
-            )
+            raise ValueError("Either both `d` and `retention_prev` must be provided or neither.")
         else:
             if (self.retention_mix_factor < 1.0) and (retention_prev is not None):
                 retention = retention * self.retention_mix_factor + retention_prev.unsqueeze(-1) * (
-                    1 - self.retention_mix_factor)
+                    1 - self.retention_mix_factor
+                )
 
         retention_down = downstream_aligner.to_downstream(x=retention)
 

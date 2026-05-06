@@ -1,23 +1,23 @@
 """Main entry point for tuning and cross validation."""
 
+import sys
+
 from project import CLI
 
 
 def main():
-    """
-    Initialize the CLI, performs tuning, and executes cross-validation.
+    """Initialize the CLI, performs tuning, and executes cross-validation.
 
     This function orchestrates the following steps:
     1. Instantiates the CLI interface.
     2. Sets up the tuning engine with all available options.
     3. Runs the tuning process.
     4. Performs cross-validation on the tuned models.
-    """
 
-    cli = CLI()
-    cli.tuning_engine.setup(which="all")
+    """
+    cli = CLI(args=[*sys.argv[1:], "--data.init_args.skip_data_init=True"])
+    cli.tuning_engine.setup(which="tune")
     cli.tuning_engine.tune()
-    cli.tuning_engine.xval(use_best_tuning_checkpoint=True)
 
 
 if __name__ == "__main__":

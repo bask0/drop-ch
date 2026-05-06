@@ -1,10 +1,11 @@
 """Normalization and standardization utilities for PyTorch."""
 
 from typing import Any
+
 import numpy as np
 import torch
-from torch import Tensor
 import xarray as xr
+from torch import Tensor
 
 TensorLike = np.ndarray[int, np.dtype[np.float32]] | torch.Tensor | list[float]
 
@@ -35,12 +36,13 @@ class Normalizer(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            means: TensorLike,
-            stds: TensorLike,
-            features_dim: int = -1,
-            log_transform: bool = False,
-            epsilon: float = 1e-5) -> None:
+        self,
+        means: TensorLike,
+        stds: TensorLike,
+        features_dim: int = -1,
+        log_transform: bool = False,
+        epsilon: float = 1e-5,
+    ) -> None:
         """Initialize the Normalizer module.
 
         Args:
@@ -58,8 +60,8 @@ class Normalizer(torch.nn.Module):
 
         super().__init__()
 
-        self.register_buffer('means', torch.as_tensor(means), persistent=True)
-        self.register_buffer('stds', torch.as_tensor(stds), persistent=True)
+        self.register_buffer("means", torch.as_tensor(means), persistent=True)
+        self.register_buffer("stds", torch.as_tensor(stds), persistent=True)
 
         self.dim = features_dim
         self.log_transform = log_transform
@@ -128,11 +130,12 @@ class Normalizer(torch.nn.Module):
 
     @staticmethod
     def make_kwargs(
-            ds: xr.Dataset,
-            norm_variables: str | list[str],
-            features_dim: int = -1,
-            log_transform: bool = False,
-            epsilon: float = 1e-5) -> dict[str, Any]:
+        ds: xr.Dataset,
+        norm_variables: str | list[str],
+        features_dim: int = -1,
+        log_transform: bool = False,
+        epsilon: float = 1e-5,
+    ) -> dict[str, Any]:
         """
         Generate normalization keyword arguments for specified variables in an xarray Dataset.
 
@@ -176,12 +179,12 @@ class Normalizer(torch.nn.Module):
             stds.append(da.std().item())
 
         args = {
-            'name': 'normalizer',
-            'means': means,
-            'stds': stds,
-            'features_dim': features_dim,
-            'log_transform': log_transform,
-            'epsilon': epsilon
+            "name": "normalizer",
+            "means": means,
+            "stds": stds,
+            "features_dim": features_dim,
+            "log_transform": log_transform,
+            "epsilon": epsilon,
         }
 
         return args
@@ -216,7 +219,7 @@ class Normalizer(torch.nn.Module):
     def __repr__(self) -> str:
         """Return a string representation of the Normalizer module."""
 
-        return f'Normalizer(..., features_dim={self.dim}, log_transform={self.log_transform}, epsilon={self.epsilon})'
+        return f"Normalizer(..., features_dim={self.dim}, log_transform={self.log_transform}, epsilon={self.epsilon})"
 
 
 class RobustStandardizer(torch.nn.Module):
@@ -245,10 +248,7 @@ class RobustStandardizer(torch.nn.Module):
 
     """
 
-    def __init__(
-            self,
-            q95s: TensorLike,
-            features_dim: int = -1) -> None:
+    def __init__(self, q95s: TensorLike, features_dim: int = -1) -> None:
         """Initialize the Normalizer module.
 
         Args:
@@ -260,7 +260,7 @@ class RobustStandardizer(torch.nn.Module):
 
         super().__init__()
 
-        self.register_buffer('q95s', torch.as_tensor(q95s), persistent=True)
+        self.register_buffer("q95s", torch.as_tensor(q95s), persistent=True)
 
         self.dim = features_dim
 
@@ -320,10 +320,7 @@ class RobustStandardizer(torch.nn.Module):
         return x * q95s
 
     @staticmethod
-    def make_kwargs(
-            ds: xr.Dataset,
-            norm_variables: str | list[str],
-            features_dim: int = -1) -> dict[str, Any]:
+    def make_kwargs(ds: xr.Dataset, norm_variables: str | list[str], features_dim: int = -1) -> dict[str, Any]:
         """
         Generate keyword arguments for normalization based on the 95th percentile (q95) of specified variables.
 
@@ -349,11 +346,7 @@ class RobustStandardizer(torch.nn.Module):
 
             q95s.append(da.quantile(q=0.95).item())
 
-        args = {
-            'name': 'robust_standardizer',
-            'q95s': q95s,
-            'features_dim': features_dim
-        }
+        args = {"name": "robust_standardizer", "q95s": q95s, "features_dim": features_dim}
 
         return args
 
@@ -374,7 +367,7 @@ class RobustStandardizer(torch.nn.Module):
     def __repr__(self) -> str:
         """Return a string representation of the RobustStandardizer module."""
 
-        return f'RobustStandardizer(..., features_dim={self.dim})'
+        return f"RobustStandardizer(..., features_dim={self.dim})"
 
 
 class LogXp(torch.nn.Module):
@@ -400,11 +393,8 @@ class LogXp(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            epsilon: float,
-            means: TensorLike | None,
-            clip_zero: bool = False,
-            features_dim: int = -1) -> None:
+        self, epsilon: float, means: TensorLike | None, clip_zero: bool = False, features_dim: int = -1
+    ) -> None:
         """Initialize the LogXp module.
 
         Args:
@@ -429,7 +419,7 @@ class LogXp(torch.nn.Module):
         if means is None:
             self.means = None
         else:
-            self.register_buffer('means', torch.as_tensor(means), persistent=True)
+            self.register_buffer("means", torch.as_tensor(means), persistent=True)
 
     def forward(self, x: Tensor, invert: bool = False) -> Tensor:
         """(De)normalize input tensor `x` using predefined statistics.
@@ -515,12 +505,13 @@ class LogXp(torch.nn.Module):
 
     @staticmethod
     def make_kwargs(
-            ds: xr.Dataset,
-            norm_variables: str | list[str],
-            epsilon: float,
-            target_centering: bool = False,
-            clip_zero: bool = False,
-            features_dim: int = -1) -> dict[str, Any]:
+        ds: xr.Dataset,
+        norm_variables: str | list[str],
+        epsilon: float,
+        target_centering: bool = False,
+        clip_zero: bool = False,
+        features_dim: int = -1,
+    ) -> dict[str, Any]:
         """
         Generate normalization keyword arguments for specified variables in an xarray Dataset.
 
@@ -555,11 +546,11 @@ class LogXp(torch.nn.Module):
             means = None
 
         args = {
-            'name': 'logXp',
-            'epsilon': epsilon,
-            'means': means,
-            'clip_zero': clip_zero,
-            'features_dim': features_dim
+            "name": "logXp",
+            "epsilon": epsilon,
+            "means": means,
+            "clip_zero": clip_zero,
+            "features_dim": features_dim,
         }
 
         return args
@@ -567,10 +558,10 @@ class LogXp(torch.nn.Module):
     def __repr__(self) -> str:
         """Return a string representation of the LogXp module."""
 
-        target_centering = 'True' if self.means is not None else 'False'
+        target_centering = "True" if self.means is not None else "False"
 
-        s = f'LogXp(..., features_dim={self.dim}, epsilon={self.epsilon}, target_centering={target_centering}, '
-        s += f'clip_zero={self.clip_zero})'
+        s = f"LogXp(..., features_dim={self.dim}, epsilon={self.epsilon}, target_centering={target_centering}, "
+        s += f"clip_zero={self.clip_zero})"
 
         return s
 
@@ -644,13 +635,13 @@ class NoNormalizer(torch.nn.Module):
         """
 
         return {
-            'name': 'no_normalizer',
+            "name": "no_normalizer",
         }
 
     def __repr__(self) -> str:
         """Return a string representation of the Normalizer module."""
 
-        return 'NoNormalizer()'
+        return "NoNormalizer()"
 
 
 class DataTansform(torch.nn.Module):
@@ -671,18 +662,16 @@ class DataTansform(torch.nn.Module):
 
         super().__init__()
 
-        if name == 'normalizer':
+        if name == "normalizer":
             self.transform = Normalizer(**kwargs)
-        elif name == 'robust_standardizer':
+        elif name == "robust_standardizer":
             self.transform = RobustStandardizer(**kwargs)
-        elif name == 'logXp':
+        elif name in ("logXp", "log1p"):  # log1p for legacy reasons, now called logXp
             self.transform = LogXp(**kwargs)
-        elif name == 'no_normalizer':
+        elif name == "no_normalizer":
             self.transform = NoNormalizer()
         else:
-            raise ValueError(
-                f"No valid transformation found for name '{name}'."
-            )
+            raise ValueError(f"No valid transformation found for name '{name}'.")
 
     def forward(self, x: Tensor, invert: bool = False) -> Tensor:
         """

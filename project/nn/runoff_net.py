@@ -1,6 +1,7 @@
 """Defines the RunofNet, a lightning model with training routing for runoff prediction."""
 
 from typing import Literal
+
 import torch
 from torch import Tensor
 from torch.optim.adamw import AdamW
@@ -24,22 +25,22 @@ class RunoffNet(LightningModuleWithSummary):
     """
 
     def __init__(
-            self,
-            num_static_in: int,
-            num_dynamic_in: int,
-            hidden_size: int = 64,
-            lstm_layers: int = 1,
-            variational_dropout: float = 0.0,
-            enc_dropout: float = 0.0,
-            max_q_chunk_size: int = 50,
-            learning_rate: float = 0.001,
-            weight_decay: float = 0.0,
-            prediction_length: int | None = None,
-            use_precip_as_lake_runoff: bool = False,
-            norm_args_stat_features: dict | None = None,
-            norm_args_dyn_features: dict | None = None,
-            norm_args_targets: dict | None = None,
-            **kwargs  # Keep.
+        self,
+        num_stat_features: int,
+        num_dynamic_features: int,
+        hidden_size: int = 64,
+        lstm_layers: int = 1,
+        variational_dropout: float = 0.0,
+        enc_dropout: float = 0.0,
+        max_q_chunk_size: int = 50,
+        learning_rate: float = 0.001,
+        weight_decay: float = 0.0,
+        prediction_length: int | None = None,
+        use_precip_as_lake_runoff: bool = False,
+        norm_args_stat_features: dict | None = None,
+        norm_args_dyn_features: dict | None = None,
+        norm_args_targets: dict | None = None,
+        **kwargs,  # Keep.
     ) -> None:
         """
         Initialize a RunoffNet instance.
@@ -50,9 +51,9 @@ class RunoffNet(LightningModuleWithSummary):
         with PyTorch Lightning's training, validation, and prediction workflows.
 
         Args:
-            num_static_in : int
+            num_stat_features : int
                 Number of static input features (e.g., basin attributes).
-            num_dynamic_in : int
+            num_dynamic_features : int
                 Number of dynamic input features per timestep (e.g., precipitation, temperature).
             hidden_size : int, default=64
                 Number of hidden units in each LSTM layer.
@@ -96,14 +97,14 @@ class RunoffNet(LightningModuleWithSummary):
         self.weight_decay = weight_decay
 
         if prediction_length is None:
-            raise ValueError('`prediction_length` must be provided.')
+            raise ValueError("`prediction_length` must be provided.")
         self.prediction_length = prediction_length
 
         self.use_precip_as_lake_runoff = use_precip_as_lake_runoff
 
         self.runoff_lstm = RunoffModel(
-            num_static_in=num_static_in,
-            num_dynamic_in=num_dynamic_in,
+            num_static_in=num_stat_features,
+            num_dynamic_in=num_dynamic_features,
             hidden_size=hidden_size,
             lstm_layers=lstm_layers,
             variational_dropout=variational_dropout,
@@ -115,9 +116,9 @@ class RunoffNet(LightningModuleWithSummary):
             norm_args_targets=norm_args_targets,
         )
 
-        self.loss_fun = RegressionLoss(criterion='l2', log_transform=False)
+        self.loss_fun = RegressionLoss(criterion="l2", log_transform=False)
 
-    def log_loss(self, loss: dict[str, Tensor], batch: HRUSample, mode: Literal['train', 'valid', 'test']) -> None:
+    def log_loss(self, loss: dict[str, Tensor], batch: HRUSample, mode: Literal["train", "valid", "test"]) -> None:
         """
         Log loss values for a given training phase.
 
@@ -135,15 +136,15 @@ class RunoffNet(LightningModuleWithSummary):
         ValueError
             If `mode` is not one of 'train', 'valid', or 'test'.
         """
-        if mode not in ('train', 'valid', 'test'):
-            raise ValueError('\'mode\' must be one of \'train\', \'valid\', or \'test\'.')
+        if mode not in ("train", "valid", "test"):
+            raise ValueError("'mode' must be one of 'train', 'valid', or 'test'.")
 
         self.log_dict(
-            {f'{mode}_{k}': v for k, v in loss.items()},
+            {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == 'train' else False,
+            on_step=True if mode == "train" else False,
             on_epoch=True,
-            batch_size=batch.x.shape[0]  # type: ignore
+            batch_size=batch.x.shape[0],  # type: ignore
         )
 
     def forward(self, *args, **kwargs) -> Tensor:
@@ -189,19 +190,13 @@ class RunoffNet(LightningModuleWithSummary):
 
         y = self.runoff_lstm.norm.norm_targets(y)  # No-op if normalization is disabled.
 
-        cutoff = slice(-self.prediction_length, None) if subset == 'train' else slice(None, None)
+        cutoff = slice(-self.prediction_length, None) if subset == "train" else slice(None, None)
 
-        loss = self.loss_fun(
-            y_hat[:, cutoff, ...],
-            y[:, cutoff, ...]
-        )
+        loss = self.loss_fun(y_hat[:, cutoff, ...], y[:, cutoff, ...])
 
         return y_hat, loss
 
-    def training_step(
-            self,
-            batch: HRUSample,
-            batch_idx: int) -> Tensor:
+    def training_step(self, batch: HRUSample, batch_idx: int) -> Tensor:
         """
         Perform a single training step.
 
@@ -222,14 +217,11 @@ class RunoffNet(LightningModuleWithSummary):
 
         _, loss = self.common_step(batch, subset=None, chunked=False)
 
-        self.log_loss(loss={'loss': loss}, mode='train', batch=batch)
+        self.log_loss(loss={"loss": loss}, mode="train", batch=batch)
 
         return loss
 
-    def validation_step(
-            self,
-            batch: HRUSample,
-            batch_idx: int) -> Tensor:
+    def validation_step(self, batch: HRUSample, batch_idx: int) -> Tensor:
         """
         Perform a single validation step.
 
@@ -250,14 +242,11 @@ class RunoffNet(LightningModuleWithSummary):
 
         _, loss = self.common_step(batch, subset=None, chunked=False)
 
-        self.log_loss(loss={'loss': loss}, mode='valid', batch=batch)
+        self.log_loss(loss={"loss": loss}, mode="valid", batch=batch)
 
         return loss
 
-    def predict_step(
-            self,
-            batch: HRUSample,
-            batch_idx: int) -> dict[str, Tensor]:
+    def predict_step(self, batch: HRUSample, batch_idx: int) -> dict[str, Tensor]:
         """
         Generate predictions for a batch.
 
@@ -289,25 +278,25 @@ class RunoffNet(LightningModuleWithSummary):
         y_hat_m3s = convert_mmd_to_m3s(y_hat_mmd, area)
 
         data = {
-            'q_pred_mmd' if dataset.use_prevah else 'Q_pred_mmd': {
-                'ds': y_hat_mmd.to('cpu'),
-                'units': 'mm/day',
-                'long_name': 'Specific runoff' if dataset.use_prevah else 'Specific streamflow',
-                'obs_counterpart': 'q_prevah_mmd' if dataset.use_prevah else 'Q_obs_mmd',
+            "q_pred_mmd" if dataset.use_prevah else "Q_pred_mmd": {
+                "ds": y_hat_mmd.to("cpu"),
+                "units": "mm/day",
+                "long_name": "Specific runoff" if dataset.use_prevah else "Specific streamflow",
+                "obs_counterpart": "q_prevah_mmd" if dataset.use_prevah else "Q_obs_mmd",
             },
-            'q_pred_m3s' if dataset.use_prevah else 'Q_pred_m3s': {
-                'ds': y_hat_m3s.to('cpu'),
-                'units': 'm³/s',
-                'long_name': 'Volumetric runoff' if dataset.use_prevah else 'Volumetric streamflow',
-                'obs_counterpart': 'q_prevah_m3s' if dataset.use_prevah else 'Q_obs_m3s'
-            }
+            "q_pred_m3s" if dataset.use_prevah else "Q_pred_m3s": {
+                "ds": y_hat_m3s.to("cpu"),
+                "units": "m³/s",
+                "long_name": "Volumetric runoff" if dataset.use_prevah else "Volumetric streamflow",
+                "obs_counterpart": "q_prevah_m3s" if dataset.use_prevah else "Q_obs_m3s",
+            },
         }
 
         return_dict = {
-            'data': data,
-            'batch': batch.to('cpu'),
-            'obs_var': 'q_prevah_mmd' if dataset.use_prevah else 'Q_obs_mmd',
-            'pred_var': 'q_pred_mmd' if dataset.use_prevah else 'Q_pred_mmd',
+            "data": data,
+            "batch": batch.to("cpu"),
+            "obs_var": "q_prevah_mmd" if dataset.use_prevah else "Q_obs_mmd",
+            "pred_var": "q_pred_mmd" if dataset.use_prevah else "Q_pred_mmd",
         }
 
         return return_dict
@@ -322,10 +311,6 @@ class RunoffNet(LightningModuleWithSummary):
             An AdamW optimizer configured with the model's learning rate and weight decay.
         """
 
-        optimizer = AdamW(
-            params=self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay
-        )
+        optimizer = AdamW(params=self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
         return optimizer
