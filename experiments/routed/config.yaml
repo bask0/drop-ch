@@ -12,14 +12,14 @@ model:
     evaporation_enabled: true
     evaporation_lr: 0.01
     routing_hidden_size: 64
-    routing_time_substeps: 0
+    routing_time_substeps: 1
     routing_lr: 0.0001
     routing_weight_decay: 0.0
 
-    lake_constraint_rate_constant: 0.2
+    lake_constraint_rate_constant: 0.05
     lake_constraint_strength: 8
     num_samples_per_graph: 50
-    gradient_accumulation_steps: 4
+    gradient_accumulation_steps: 2
     max_q_chunk_size: 400
 
 data:
@@ -83,34 +83,37 @@ data:
     batch_size: 2
     num_workers: 8
     val_time_range: ["1990-01-01", "1999-12-31"]
+    curriculum_start_area: 100.0
+    curriculum_ramp_epochs: 30
 
 trainer:
-  max_epochs: 100
+  max_epochs: 200
+  reload_dataloaders_every_n_epochs: 1
   callbacks:
     class_path: lightning.pytorch.callbacks.TQDMProgressBar
     init_args:
-      refresh_rate: 5
+      refresh_rate: 10
 
 tuning_engine:
   exp_dir: experiments/routed
   log_dir: /cluster/work/climate/kraftb/streamflow_net/routed
   monitor: valid_loss
-  n_trials: 80
+  n_trials: 40
   num_folds: 1
   overwrite: False
 
   sampler:
     class_path: optuna.samplers.TPESampler
     init_args:
-      n_startup_trials: 20
+      n_startup_trials: 12
       multivariate: True
       n_ei_candidates: 64
 
   pruner:
     class_path: optuna.pruners.HyperbandPruner
     init_args:
-      min_resource: 40
-      max_resource: 80
+      min_resource: 50
+      max_resource: 100
       reduction_factor: 2
 
   search_space:
@@ -131,21 +134,4 @@ tuning_engine:
         method: float
         low: 1e-6
         high: 1e-4
-        log: True
-
-      routing_time_substeps:
-        dtype: int
-        method: categorical
-        choices: [0, 1]
-
-      routing_lr:
-        method: float
-        low: 1e-5
-        high: 1e-3
-        log: True
-
-      routing_weight_decay:
-        method: float
-        low: 1e-6
-        high: 1e-2
         log: True

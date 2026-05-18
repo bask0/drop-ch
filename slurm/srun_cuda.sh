@@ -9,6 +9,8 @@
 #SBATCH --exclude=eu-lo-g3-007,eu-lo-g2-[021-039],eu-lo-g3-[001-006,008-034,036-048]
 #SBATCH --output=slurm_logs/%j.out
 
+# Use `--account=gpu/es_senev`?
+
 module load eth_proxy
 module load stack/2024-06 gcc/12.2.0
 module load cuda/12.8.0

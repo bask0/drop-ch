@@ -6,16 +6,17 @@ model:
     use_instant_routing: true
     runoff_lr: 0.0001
     runoff_weight_decay: 0.0
-    runoff_freeze_epochs: 5
-    warmup_epochs: 5
-    cycle_epochs: 20
+    runoff_lr_div_factor: 10.0
+    runoff_lr_warmup_epochs: 5
     runoff_dropout: 0.1
     runoff_enc_dropout: 0.1
     evaporation_enabled: true
     evaporation_lr: 0.01
+    routing_hidden_size: 16
     lake_constraint_rate_constant: 0.1
     num_samples_per_graph: 20
-    max_q_chunk_size: 400
+    gradient_accumulation_steps: 2
+    max_q_chunk_size: 200
 
 data:
   class_path: project.data.datamodule.GraphDataModule
@@ -75,36 +76,40 @@ data:
     k_hops: 200
     temporal_context_length: 365
     prediction_length: 20
-    batch_size: 2
-    num_workers: 12
+    batch_size: 1
+    num_workers: 8
+    val_time_range: ["1990-01-01", "1999-12-31"]
+    curriculum_start_area: 100.0
+    curriculum_ramp_epochs: 30
 
 trainer:
-  max_epochs: 80
+  max_epochs: 200
+  reload_dataloaders_every_n_epochs: 1
   callbacks:
     class_path: lightning.pytorch.callbacks.TQDMProgressBar
     init_args:
-      refresh_rate: 5
+      refresh_rate: 10
 
 tuning_engine:
   exp_dir: experiments/instant
   log_dir: /cluster/work/climate/kraftb/streamflow_net/instant
   monitor: valid_loss
-  n_trials: 100
+  n_trials: 40
   num_folds: 1
   overwrite: False
 
   sampler:
     class_path: optuna.samplers.TPESampler
     init_args:
-      n_startup_trials: 20
+      n_startup_trials: 12
       multivariate: True
       n_ei_candidates: 64
 
   pruner:
     class_path: optuna.pruners.HyperbandPruner
     init_args:
-      min_resource: 20
-      max_resource: 80
+      min_resource: 50
+      max_resource: 100
       reduction_factor: 2
 
   search_space:
@@ -112,13 +117,13 @@ tuning_engine:
       runoff_lr:
         method: float
         low: 1e-6
-        high: 3e-5
+        high: 1e-4
         log: True
 
       runoff_weight_decay:
         method: float
         low: 1e-6
-        high: 1e-4
+        high: 1e-2
         log: True
 
       evaporation_lr:
