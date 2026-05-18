@@ -10,7 +10,7 @@ import torch
 from lightning.pytorch.utilities import grad_norm
 from torch import Tensor
 from torch.optim.adamw import AdamW
-from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR, LinearLR
+from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR, LinearLR, SequentialLR
 from torch.optim.optimizer import Optimizer
 from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
@@ -85,6 +85,7 @@ class StreamflowNet(pl.LightningModule):
         routing_time_substeps: int = 0,
         routing_lr: float = 0.001,
         routing_weight_decay: float = 0.0,
+        lr_cycle_epochs: int | None = None,
         use_instant_routing: bool = False,
         lake_constraint_rate_constant: float = 0.3,
         lake_constraint_strength: float = 1.0,
@@ -148,6 +149,10 @@ class StreamflowNet(pl.LightningModule):
                 Default is 0.001.
             routing_weight_decay (float, optional): Weight decay for the routing network optimizer.
                 Default is 0.0.
+            lr_cycle_epochs (int | None, optional): Number of epochs for the cosine decay phase of
+                the routing LR scheduler. After this, LR is held constant at eta_min. If None, cosine runs
+                for the full training duration. Should match `max_resource` in the Optuna pruner config.
+                Default is None.
             lake_constraint_rate_constant (float, optional): Rate constant for lake constraint in loss function.
                 Default is 0.3.
             lake_constraint_strength (float, optional): Absolute strength of the lake constraint added to the
@@ -194,6 +199,7 @@ class StreamflowNet(pl.LightningModule):
         self.evaporation_lr = evaporation_lr
         self.routing_lr = routing_lr
         self.routing_weight_decay = routing_weight_decay
+        self.lr_cycle_epochs = lr_cycle_epochs
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.prediction_length = prediction_length
 
@@ -406,7 +412,7 @@ class StreamflowNet(pl.LightningModule):
         Returns:
             Tensor: The routed discharge tensor after applying instant routing.
         """
-        q = self.runoff_net(batch=batch, scale_output=True, subset=None)
+        q = self.runoff_net.chunked_forward(batch=batch, scale_output=True, subset=None)
         q = self.convert_q_to_m3s(x=q, batch=batch, subset=None)
         Q = self.routing_net.instant_route(batch=batch, q=q)
 
@@ -452,10 +458,7 @@ class StreamflowNet(pl.LightningModule):
         )
 
         runoff_optimizer, evaporation_optimizer, routing_optimizer = cast(
-            tuple[Optimizer, Optimizer, Optimizer], self.optimizers()
-        )
-        runoff_scheduler, routing_scheduler = cast(
-            tuple[torch.optim.lr_scheduler.LRScheduler, torch.optim.lr_scheduler.LRScheduler], self.lr_schedulers()
+            "tuple[Optimizer, Optimizer, Optimizer]", self.optimizers()
         )
 
         self.manual_backward(loss / self.gradient_accumulation_steps)
@@ -469,9 +472,6 @@ class StreamflowNet(pl.LightningModule):
             runoff_optimizer.step()
             evaporation_optimizer.step()
             routing_optimizer.step()
-
-            runoff_scheduler.step()
-            routing_scheduler.step()
 
             runoff_optimizer.zero_grad()
             evaporation_optimizer.zero_grad()
@@ -640,16 +640,13 @@ class StreamflowNet(pl.LightningModule):
             - Scheduler parameters are configured using class attributes.
         """
 
-        stepping_batches = int(self.trainer.estimated_stepping_batches)
         max_epochs = self.trainer.max_epochs
         if max_epochs is None:
             msg = "max_epochs must be set in the trainer."
             raise ValueError(msg)
-        steps_per_epoch = stepping_batches // max_epochs
-        # All scheduler steps are in units of optimizer steps (batches / accumulation).
-        optimizer_steps_per_epoch = max(1, steps_per_epoch // self.gradient_accumulation_steps)
-        warmup_steps = int(self.runoff_lr_warmup_epochs) * optimizer_steps_per_epoch
-        optimizer_total_steps = max_epochs * optimizer_steps_per_epoch
+        # All scheduler steps are in units of epochs (stepped once per epoch in on_train_epoch_end).
+        warmup_steps = int(self.runoff_lr_warmup_epochs)
+        optimizer_total_steps = max_epochs
 
         runoff_optimizer = AdamW(
             params=self.runoff_net.parameters(), lr=self.runoff_lr, weight_decay=self.runoff_weight_decay
@@ -672,10 +669,21 @@ class StreamflowNet(pl.LightningModule):
                 total_iters=warmup_steps,
             )
 
-        # Routing: cosine decay from routing_lr → routing_lr/50 over full training.
-        routing_scheduler = CosineAnnealingLR(
-            routing_optimizer, T_max=optimizer_total_steps, eta_min=self.routing_lr / 50.0
+        # Routing: cosine decay from routing_lr → routing_lr/50, then constant tail.
+        cosine_epochs = self.lr_cycle_epochs if self.lr_cycle_epochs is not None else optimizer_total_steps
+        cosine_scheduler = CosineAnnealingLR(
+            routing_optimizer, T_max=cosine_epochs, eta_min=self.routing_lr / 50.0
         )
+        tail_epochs = optimizer_total_steps - cosine_epochs
+        if tail_epochs > 0:
+            tail_scheduler = ConstantLR(routing_optimizer, factor=1.0 / 50.0, total_iters=tail_epochs)
+            routing_scheduler = SequentialLR(
+                routing_optimizer,
+                schedulers=[cosine_scheduler, tail_scheduler],
+                milestones=[cosine_epochs],
+            )
+        else:
+            routing_scheduler = cosine_scheduler
 
         return (
             {
@@ -746,6 +754,11 @@ class StreamflowNet(pl.LightningModule):
         Returns:
             None
         """
+
+        schedulers = cast("tuple[torch.optim.lr_scheduler.LRScheduler]", self.lr_schedulers())
+        for scheduler in schedulers:
+            scheduler.step()
+
         super().on_train_epoch_end()
         self.log_epoch_median_loss("train")
 

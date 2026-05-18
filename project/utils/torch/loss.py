@@ -671,7 +671,7 @@ class QLoss(torch.nn.Module):
         """
 
         full_name = f"{mode}_{name}"
-        if name not in self.loss_state:
+        if full_name not in self.loss_state:
             self.loss_state[full_name] = []
 
         self.loss_state[full_name].append(values.detach().cpu())

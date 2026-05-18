@@ -4,6 +4,7 @@ from math import ceil
 from typing import cast
 import torch
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from project.nn.layers.lstm import LSTM
 from project.nn.models.base import TorchNormalizer
@@ -126,17 +127,17 @@ class RunoffModel(torch.nn.Module):
 
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
-    @torch.no_grad()
     def chunked_forward(
             self,
             batch: HRUSample,
             scale_output: bool,
             subset: Tensor | None = None) -> Tensor:
         """
-        Memory-efficient inference forward pass using chunking to avoid OOM issues.
+        Memory-efficient forward pass using chunking to avoid OOM issues.
 
-        No gradients are recorded during this pass, making it suitable for inference only.
-        Processes the input in chunks if the number of nodes exceeds `max_q_chunk_size`.
+        Processes nodes in chunks to limit peak activation memory, while preserving
+        the computation graph (gradients flow through each chunk via torch.cat).
+        When called inside a torch.no_grad() context, no gradients are recorded.
 
         Args:
             batch (HRUSample): Graph batch containing input tensors.
@@ -157,18 +158,21 @@ class RunoffModel(torch.nn.Module):
         if num_iter == 1:
             return self(batch=batch, subset=subset, scale_output=scale_output)
 
-        dummy = batch.d[..., :1]
-        out = torch.full_like(dummy, fill_value=torch.nan)
+        x_all = batch.x if subset is None else batch.x[subset]
+        d_all = batch.d if subset is None else batch.d[subset]
 
+        chunks = []
         for i in range(num_iter):
             start_sample = i * self.max_q_chunk_size
             end_sample = (i + 1) * self.max_q_chunk_size
-            out[start_sample:end_sample] = self._model_forward(
-                batch=batch,
-                subset=subset,
-                sample_slice=slice(start_sample, end_sample)
-            )
+            x_chunk = self.norm.norm_stat_features(x_all[start_sample:end_sample])
+            d_chunk = self.norm.norm_dyn_features(d_all[start_sample:end_sample])
+            # Gradient checkpointing: recompute LSTM activations during backward
+            # instead of storing them, reducing activation memory from O(N×T×H) to
+            # O(chunk_size×T×H). Under no_grad, grad_checkpoint is a plain forward call.
+            chunks.append(grad_checkpoint(self.lstm, d_chunk, x_chunk, use_reentrant=False))
 
+        out = torch.cat(chunks, dim=0)
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
     def transform_output(self, batch: HRUSample, q: Tensor, scale_output: bool, subset: Tensor | None) -> Tensor:
