@@ -589,9 +589,9 @@ class QLoss(torch.nn.Module):
             raise ValueError("with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.")
 
         # Guard against empty eval_subset (no observations in batch).
-        # For ungauged catchments, skip loss and return 0.
+        # For ungauged catchments, return zero loss (connected to graph via y_hat).
         if not eval_subset.any():
-            zero_loss = y_hat.new_tensor(0.0)
+            zero_loss = (y_hat * 0.0).mean()  # Zero loss connected to computational graph
             log_loss = {
                 "total_loss": zero_loss,
                 "loss": zero_loss,
