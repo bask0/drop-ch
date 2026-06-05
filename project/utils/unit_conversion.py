@@ -91,7 +91,8 @@ def convert_m3s_to_mmd(x: Numeric, area: Numeric) -> Numeric:
     """
     check_type(x, area)
 
-    return x / area * 60 * 60 * 24 / 1000
+    # Reorder to divide first to avoid float32 overflow when x is large
+    return (x / 1000) / area * 60 * 60 * 24
 
 
 def convert_xr_mmd_to_m3s(ds: xr.Dataset, variables: list[str], area_var: str = "area") -> xr.Dataset:

@@ -89,6 +89,7 @@ class StreamflowNet(pl.LightningModule):
         use_instant_routing: bool = False,
         lake_constraint_rate_constant: float = 0.3,
         lake_constraint_strength: float = 1.0,
+        lake_constraint_margin: float = 0.0,
         num_samples_per_graph: int = 20,
         gradient_accumulation_steps: int = 1,
         max_q_chunk_size: int = 200,
@@ -158,6 +159,8 @@ class StreamflowNet(pl.LightningModule):
             lake_constraint_strength (float, optional): Absolute strength of the lake constraint added to the
                 regression loss. Set to the scale of reg_loss (~5-6) to make it compete on equal footing.
                 Default is 1.0.
+            lake_constraint_margin (float, optional): Minimum required gap between mean lake retention and mean
+                non-lake retention. Penalty activates when mean_nonlake - mean_lake + margin > 0. Default is 0.1.
             num_samples_per_graph (int, optional): Number of paths sampled per graph for training.
                 Default is 20.
             gradient_accumulation_steps (int, optional): Number of batches to accumulate gradients over before
@@ -213,8 +216,8 @@ class StreamflowNet(pl.LightningModule):
                     "`num_stat_features` and `num_dynamic_features` must be provided when `runoff_net_exp_dir` is None."
                 )
             self.runoff_net = RunoffNet(
-                num_static_in=num_stat_features,
-                num_dynamic_in=num_dynamic_features,
+                num_stat_features=num_stat_features,
+                num_dynamic_features=num_dynamic_features,
                 hidden_size=runoff_hidden_size,
                 lstm_layers=runoff_lstm_layers,
                 variational_dropout=runoff_dropout,
@@ -229,7 +232,6 @@ class StreamflowNet(pl.LightningModule):
             self.runoff_net = self._get_best_runoff_net(
                 experiment_dir=runoff_net_exp_dir,
                 use_pretrained=runoff_use_pretrained,
-                max_q_chunk_size=max_q_chunk_size,
                 norm_args_stat_features=norm_args_stat_features,
                 norm_args_dyn_features=norm_args_dyn_features,
                 norm_args_targets=norm_args_targets,
@@ -238,6 +240,8 @@ class StreamflowNet(pl.LightningModule):
         # For routed experiments, runoff is replaced with precipitation over lake surfaces.
         # This is because PREVAH is not trusted for lake runoff.
         self.runoff_net.use_precip_as_lake_runoff = True
+        # Chunk size is a runtime/hardware parameter — override whatever the checkpoint stored.
+        self.runoff_net.max_q_chunk_size = max_q_chunk_size
 
         # ----- EvaporationNet ------
         #############################
@@ -272,6 +276,7 @@ class StreamflowNet(pl.LightningModule):
             use_water_freq_constraint=not use_instant_routing,
             lake_constraint_rate_constant=lake_constraint_rate_constant,
             lake_constraint_strength=lake_constraint_strength,
+            lake_constraint_margin=lake_constraint_margin,
         )
 
     def convert_q_to_m3s(self, x: Tensor, batch: Batch, subset: Tensor | None = None) -> Tensor:
@@ -368,6 +373,7 @@ class StreamflowNet(pl.LightningModule):
         q = self.runoff_net.chunked_forward(batch=batch, scale_output=True, subset=None)
         q = self.convert_q_to_m3s(x=q, batch=batch, subset=None)
         Q = self.routing_net.instant_route(batch=batch, q=q)
+        Q = Q.clamp(min=0.0, max=1e5)
 
         return q, Q
 
@@ -415,6 +421,7 @@ class StreamflowNet(pl.LightningModule):
         q = self.runoff_net.chunked_forward(batch=batch, scale_output=True, subset=None)
         q = self.convert_q_to_m3s(x=q, batch=batch, subset=None)
         Q = self.routing_net.instant_route(batch=batch, q=q)
+        Q = Q.clamp(min=0.0, max=1e5)
 
         return Q
 
@@ -454,7 +461,7 @@ class StreamflowNet(pl.LightningModule):
             mode="train",
             step=self.current_epoch,
             x_retention=retention,
-            prediction_length=self.prediction_length,
+            context_length=batch.y.shape[-2] - self.prediction_length,
         )
 
         runoff_optimizer, evaporation_optimizer, routing_optimizer = cast(
@@ -513,7 +520,7 @@ class StreamflowNet(pl.LightningModule):
             mode="valid",
             step=self.current_epoch,
             x_retention=retention,
-            prediction_length=self.prediction_length,
+            context_length=0,
         )
 
         self.log_loss(loss=log_loss, mode="valid", batch=batch)
@@ -671,9 +678,7 @@ class StreamflowNet(pl.LightningModule):
 
         # Routing: cosine decay from routing_lr → routing_lr/50, then constant tail.
         cosine_epochs = self.lr_cycle_epochs if self.lr_cycle_epochs is not None else optimizer_total_steps
-        cosine_scheduler = CosineAnnealingLR(
-            routing_optimizer, T_max=cosine_epochs, eta_min=self.routing_lr / 50.0
-        )
+        cosine_scheduler = CosineAnnealingLR(routing_optimizer, T_max=cosine_epochs, eta_min=self.routing_lr / 50.0)
         tail_epochs = optimizer_total_steps - cosine_epochs
         if tail_epochs > 0:
             tail_scheduler = ConstantLR(routing_optimizer, factor=1.0 / 50.0, total_iters=tail_epochs)
