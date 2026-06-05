@@ -508,6 +508,7 @@ class QLoss(torch.nn.Module):
         use_water_freq_constraint: bool = False,
         lake_constraint_rate_constant: float = 0.3,
         lake_constraint_strength: float = 1.0,
+        lake_constraint_margin: float = 0.0,
     ) -> None:
         """Initialize the loss module with optional water frequency and lake constraints.
 
@@ -520,6 +521,9 @@ class QLoss(torch.nn.Module):
                 Loss is computed as ``reg_loss + strength * water_freq_loss * weight``, so setting
                 this to the typical scale of reg_loss makes the constraint compete on equal footing.
                 Defaults to 1.0.
+            lake_constraint_margin (float, optional): Minimum required gap between mean lake retention
+                and mean non-lake retention. Penalises when mean_nonlake - mean_lake + margin > 0.
+                Defaults to 0.1.
 
         """
 
@@ -528,6 +532,7 @@ class QLoss(torch.nn.Module):
         self.use_water_freq_constraint = use_water_freq_constraint
         self.lake_constraint_rate_constant = lake_constraint_rate_constant
         self.lake_constraint_strength = lake_constraint_strength
+        self.lake_constraint_margin = lake_constraint_margin
         self.loss_fun = RegressionLoss(criterion="L2", log_transform=False, reduction="none")
 
         self.loss_state = {}
@@ -541,7 +546,7 @@ class QLoss(torch.nn.Module):
         subset: Tensor | None = None,
         y_instant: Tensor | None = None,
         x_retention: Tensor | None = None,
-        prediction_length: int = 0,
+        context_length: int = 0,
     ) -> tuple[Tensor, dict[str, Tensor]]:
         """Compute the loss and associated metrics for a batch of predictions.
 
@@ -553,7 +558,7 @@ class QLoss(torch.nn.Module):
             subset (Tensor, optional): Indices of HRUs to evaluate (used in training).
             y_instant (Tensor, optional): Instantaneous reference streamflow values (required for 'ss' criterion).
             x_retention (Tensor, optional): Retention values for water frequency constraint.
-            prediction_length (int, optional): Number of timesteps to evaluate.
+            context_length (int, optional): Number of warmup timesteps to skip at the start. Default 0 (use all).
 
         Returns:
             tuple:
@@ -583,10 +588,22 @@ class QLoss(torch.nn.Module):
         if self.use_water_freq_constraint and (x_retention is None):
             raise ValueError("with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`.")
 
+        # Guard against empty eval_subset (no observations in batch).
+        # For ungauged catchments, skip loss and return 0.
+        if not eval_subset.any():
+            zero_loss = y_hat.new_tensor(0.0)
+            log_loss = {
+                "total_loss": zero_loss,
+                "loss": zero_loss,
+                "water_freq_loss": zero_loss,
+                "water_freq_loss_weight": zero_loss,
+            }
+            return zero_loss, log_loss
+
         upstream_area = batch.upstream_area[eval_subset].unsqueeze(-1)
 
-        y_hat = convert_m3s_to_mmd(y_hat[eval_subset, -prediction_length:, 0], upstream_area)
-        y = convert_m3s_to_mmd(batch.y[eval_subset, -prediction_length:, 0], upstream_area)
+        y_hat = convert_m3s_to_mmd(y_hat[eval_subset, context_length:, 0], upstream_area)
+        y = convert_m3s_to_mmd(batch.y[eval_subset, context_length:, 0], upstream_area)
 
         if self.loss_fun.criterion == "nse":
             q_std = batch.q_std[eval_subset].unsqueeze(-1)
@@ -596,7 +613,7 @@ class QLoss(torch.nn.Module):
             reg_loss_batch = self.loss_fun(input=y_hat, target=y)
         elif self.loss_fun.criterion == "ss":
             assert y_instant is not None
-            y_instant = convert_m3s_to_mmd(y_instant[eval_subset, -prediction_length:, 0], upstream_area)
+            y_instant = convert_m3s_to_mmd(y_instant[eval_subset, context_length:, 0], upstream_area)
             reg_loss_batch = self.loss_fun(input=y_hat, target=y, reference=y_instant)
         else:
             raise NotImplementedError(f"`RegressionLoss(criterion={self.loss_fun.criterion}, ...)` not implemented.")
@@ -609,26 +626,21 @@ class QLoss(torch.nn.Module):
                 "with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`."
             )
 
-            decay_const = torch.ones_like(batch.is_lake[:1]) * self.lake_constraint_rate_constant
-            current_step = torch.ones_like(batch.is_lake[:1]) * step
-            weight = torch.exp(-decay_const * current_step)
-            is_lake = batch.is_lake[subset] if mode == "train" else batch.is_lake
+            weight = torch.exp(
+                x_retention.new_tensor(-self.lake_constraint_rate_constant * step)
+            )
+            water_freq = batch.water_freq[subset] if mode == "train" else batch.water_freq
+            hru_area = batch.hru_area[subset] if mode == "train" else batch.hru_area
 
-            t0 = torch.nn.functional.relu(-x_retention + 0.5)
-            t1 = torch.nn.functional.relu(x_retention - 0.1)
-
-            water_freq_loss = torch.where(is_lake > 0.5, t0, t1)
-
-            if water_freq_loss.dim() == 0:
-                if is_lake.all() == 1.0:
-                    water_freq_loss = water_freq_loss.mean()
-                else:
-                    water_freq_loss = 0.0
+            owa = water_freq * hru_area
+            owa_sum = owa.sum()
+            if owa_sum > 0:
+                owa_norm = owa / owa_sum
+                water_freq_loss = torch.nn.functional.relu(
+                    x_retention.mean() - (x_retention * owa_norm).sum() + self.lake_constraint_margin
+                )
             else:
-                if not is_lake.any():
-                    water_freq_loss = 0.0
-                else:
-                    water_freq_loss = water_freq_loss[is_lake == 1.0].mean()
+                water_freq_loss = x_retention.new_zeros(())
 
         else:
             weight = 0.0
