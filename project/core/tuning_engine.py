@@ -124,6 +124,10 @@ class TuningEngine:
     """
 
     EXPERIMENT_NAME = "experiment"
+    # Must be "omegaconf+" (not "omegaconf") so that `${data_root}`/`${log_root}` interpolation
+    # (see experiments/paths.yaml) resolves across the merged set of config files, rather than
+    # only within each file independently. Covered by tests/test_config_resolution.py.
+    TRIAL_PARSER_MODE = "omegaconf+"
 
     def __init__(
         self,
@@ -536,7 +540,7 @@ class TuningEngine:
 
         # Combine base config paths and overrides for LightningCLI
         cli = CLI(
-            parser_kwargs=dict(default_config_files=config_files, parser_mode="omegaconf+"),
+            parser_kwargs=dict(default_config_files=config_files, parser_mode=self.TRIAL_PARSER_MODE),
             save_config_kwargs={"overwrite": True},
             trainer_defaults=trainer_defaults,
             # Pass hyperparameters as CLI overrides
