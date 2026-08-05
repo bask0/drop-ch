@@ -13,7 +13,7 @@ model:
 data:
   class_path: project.data.datamodule.HRUDataModule
   init_args:
-    data_path: "/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr"
+    data_path: "${data_root}/harmonized_hru_data.zarr"
     stat_features:
       -  agriculture_freq
       -  area
@@ -49,7 +49,7 @@ trainer:
 
 tuning_engine:
   exp_dir: experiments/prevah
-  log_dir: /cluster/work/climate/kraftb/streamflow_net/prevah
+  log_dir: ${log_root}/prevah
   monitor: valid_loss
   n_trials: 60
   num_folds: 1

@@ -12,7 +12,7 @@ model:
 data:
   class_path: project.data.datamodule.GraphDataModule
   init_args:
-    data_path: "/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr"
+    data_path: "${data_root}/harmonized_hru_data.zarr"
     stat_features:
       -  agriculture_freq
       -  area
@@ -63,7 +63,7 @@ trainer:
 
 tuning_engine:
   exp_dir: experiments/lumped
-  log_dir: /cluster/work/climate/kraftb/streamflow_net/lumped
+  log_dir: ${log_root}/lumped
   monitor: valid_loss
   n_trials: 100
   num_folds: 1

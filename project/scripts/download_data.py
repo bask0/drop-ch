@@ -1,4 +1,7 @@
-"""Script to download and process MERIT and SoilGrids data."""
+"""Script to download and process MERIT and SoilGrids data.
+
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+"""
 
 import logging
 import os
@@ -18,7 +21,7 @@ import xarray as xr
 
 logging.basicConfig(format='%(asctime)s | %(message)s', level=logging.INFO, datefmt='%m/%d/%Y %I:%M:%S %p')
 
-data_dir = Path('/net/argon/landclim_nobackup/kraftb/data/merit/')
+data_dir = Path('/path/to/raw_data/data/merit/')
 nc_file = data_dir / 'merit.nc'
 
 if not data_dir.exists():
@@ -40,6 +43,7 @@ for var in ['elv']:
         logging.info('  > Downloading...')
 
         url = f'https://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/distribute/v1.0/{dataset}'
+        # This is the University of Tokyo's public shared login for MERIT-Hydro downloads, not a personal credential.
         scall = f'wget --quiet --user hydrography --password rivernetwork -P {data_dir} {url}'
         os.system(scall)
 
@@ -96,13 +100,13 @@ ds.to_netcdf(nc_file)
 
 logging.info('Done.')
 
-data_dir = Path('/net/argon/landclim_nobackup/kraftb/data/soilgrids/')
+data_dir = Path('/path/to/raw_data/data/soilgrids/')
 
 if not data_dir.exists():
     os.makedirs(data_dir)
 
 
-ref_ds = xr.open_dataset('/net/argon/landclim_nobackup/kraftb/data/merit/merit.nc')
+ref_ds = xr.open_dataset('/path/to/raw_data/data/merit/merit.nc')
 
 variables = ['bdod', 'sand', 'silt', 'clay', 'cfvo']
 depths = [(0, 5), (5, 15), (15, 30)]

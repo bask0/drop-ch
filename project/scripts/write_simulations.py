@@ -1,4 +1,7 @@
-"""Write simulations to compressed netCDF4 file."""
+"""Write simulations to compressed netCDF4 file.
+
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+"""
 
 import os
 from dask.diagnostics.progress import ProgressBar
@@ -59,12 +62,12 @@ def get_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
     return encoding
 
 
-ds = xr.open_zarr('/net/argon/landclim/kraftb/machflow_routing/data/results/predictions.zarr')
+ds = xr.open_zarr('/path/to/raw_data/machflow_routing/data/results/predictions.zarr')
 
 ds = ds[[var for var in ds.data_vars if not str(var).endswith('mmd')]]
 ds = ds.drop_vars(['Q_emulated', 'Q_instant_pred_m3s'])
 
-out_path = '/net/argon/landclim/kraftb/machflow_routing/data/results/predictions_compressed.zarr'
+out_path = '/path/to/raw_data/machflow_routing/data/results/predictions_compressed.zarr'
 
 encoding = get_encoding(ds, clevel=7)
 

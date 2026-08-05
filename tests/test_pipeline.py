@@ -1,5 +1,7 @@
-# tests/test_datamodule.py
+# tests/test_pipeline.py
 # -*- coding: utf-8 -*-
+import os
+
 import numpy as np
 import pytest
 import torch
@@ -11,6 +13,13 @@ from project.utils.typing import HRUSample
 
 torch.manual_seed(0)
 np.random.seed(0)
+
+DATA_PATH = "/path/to/data/harmonized_hru_data.zarr"
+
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(DATA_PATH),
+    reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit DATA_PATH to point to your data).",
+)
 
 
 # -----------------------
@@ -46,7 +55,7 @@ def graph_data_module(stat_features, dyn_features) -> GraphDataModule:
     k_hops = 200
 
     datamodule = GraphDataModule(
-        data_path="/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr",
+        data_path=DATA_PATH,
         stat_features=stat_features,
         dyn_features=dyn_features,
         split_mode="random",
@@ -82,21 +91,23 @@ def batch(train_loader) -> HRUSample:
 def test_lumped_pipeline_smoke(stat_features, dyn_features, graph_data_module, batch):
 
     model = RunoffNet(
-        num_static_in=len(stat_features),
-        num_dynamic_in=len(dyn_features),
+        num_stat_features=len(stat_features),
+        num_dynamic_features=len(dyn_features),
         hidden_size=8,
         lstm_layers=1,
-        dropout=0.1,
+        variational_dropout=0.1,
         enc_dropout=0.1,
         prediction_length=20,
         max_q_chunk_size=1000,
-        convert_to_mm=True,
         use_precip_as_lake_runoff=False,
         norm_args_stat_features=graph_data_module.norm_args_stat_features,
-        norm_args_stat_routing_features=graph_data_module.norm_args_stat_routing_features,
         norm_args_dyn_features=graph_data_module.norm_args_dyn_features,
         norm_args_targets=graph_data_module.norm_args_targets,
     )
 
     # Forward pass
-    model(batch, subset=None, scale_output=True)
+    y_hat = model(batch, subset=None, scale_output=True)
+
+    assert torch.is_tensor(y_hat)
+    assert y_hat.shape[0] == batch.y.shape[0]
+    assert torch.isfinite(y_hat).all()

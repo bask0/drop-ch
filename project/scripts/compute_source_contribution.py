@@ -23,8 +23,7 @@ argument_parser = ArgumentParser()
 argument_parser.add_argument(
     '--optuna_tune_db',
     type=str,
-    required=False,
-    default='/cluster/work/climate/kraftb/runs/routed/random/tune/optuna.db',
+    required=True,
     help='Path to the optuna tune database.'
 )
 argument_parser.add_argument(

@@ -66,6 +66,8 @@ class CLI(LightningCLI):
             **kwargs: Arbitrary keyword arguments passed to the superclass initializer.
         """
 
+        kwargs.setdefault("parser_kwargs", {}).setdefault("parser_mode", "omegaconf+")
+
         super().__init__(
             pl.LightningModule,
             pl.LightningDataModule,
@@ -91,6 +93,16 @@ class CLI(LightningCLI):
 
         # Add LightningCLI args first
         super().add_arguments_to_parser(parser)
+
+        # Centralized path roots. Referenced from experiment configs via `${data_root}`/`${log_root}`
+        # interpolation (see experiments/paths.yaml) so that only these two values need editing
+        # per machine/user.
+        parser.add_argument("--data_root", type=str, help="Root directory containing input datasets.")
+        parser.add_argument("--log_root", type=str, help="Root directory for experiment logs and outputs.")
+        # Not used by the CLI itself (read directly by project/utils/plotting.py), but registered
+        # here so that experiments/paths.yaml can be passed as a `-c` config without jsonargparse
+        # rejecting the unrecognized key.
+        parser.add_argument("--hru_file", type=str, help="Path to the HRU geopackage file (used for plotting).")
 
         # Avoid circular import
         from project.core.tuning_engine import TuningEngine

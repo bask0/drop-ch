@@ -1,7 +1,7 @@
 model:
   class_path: project.nn.streamflow_net.StreamflowNet
   init_args:
-    runoff_net_exp_dir: /cluster/work/climate/kraftb/streamflow_net/prevah
+    runoff_net_exp_dir: ${log_root}/prevah
     runoff_use_pretrained: true
     use_instant_routing: true
     runoff_lr: 0.0001
@@ -21,7 +21,7 @@ model:
 data:
   class_path: project.data.datamodule.GraphDataModule
   init_args:
-    data_path: "/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr"
+    data_path: "${data_root}/harmonized_hru_data.zarr"
     stat_features:
       -  agriculture_freq
       -  area
@@ -79,7 +79,7 @@ trainer:
 
 tuning_engine:
   exp_dir: experiments/instant
-  log_dir: /cluster/work/climate/kraftb/streamflow_net/instant
+  log_dir: ${log_root}/instant
   monitor: valid_loss
   n_trials: 40
   num_folds: 1

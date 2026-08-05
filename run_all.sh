@@ -23,6 +23,7 @@ submit_split() {
     local DEP_JOB=${3:-""}
 
     local CONFIG_ARGS=(
+        -c experiments/paths.yaml
         -c experiments/base_config.yaml
         -c experiments/$MODEL/config.yaml
         -c experiments/$MODEL/$SPLIT/config.yaml
@@ -76,6 +77,7 @@ submit_split() {
 # ── PREVAH (single run, no splits — feeds all routed/instant experiments) ─────
 echo "=== Submitting prevah ==="
 PREVAH_CONFIG_ARGS=(
+    -c experiments/paths.yaml
     -c experiments/base_config.yaml
     -c experiments/prevah/config.yaml
 )

@@ -1980,11 +1980,6 @@ packages:
   purls: []
   size: 71809
   timestamp: 1765193127016
-- pypi: ./
-  name: drop-ch
-  version: 0.2.0
-  sha256: 3b5ee2e2905b9e12259093fe5d78a485fbc46dab49dfac7d8fdcdaf49396083c
-  requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/eccodes-2.46.0-h83bc92c_0.conda
   sha256: 2a00d4fda4ce24dff71bc97b6a57cd61fa98be25da38d387d3935cfb8d84cdc3
   md5: 0f73a3e483c4fbc7bf6fb840d816c5a5
@@ -8553,6 +8548,11 @@ packages:
   - pkg:pypi/statsmodels?source=hash-mapping
   size: 12109735
   timestamp: 1764983382505
+- pypi: ./
+  name: streamflow-net
+  version: 0.2.0
+  sha256: 6e60930c8d62a15207b7eb57f46ad9d950eff5074f11c9fb3bd0d741430032e1
+  requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/svt-av1-4.0.1-hecca717_0.conda
   sha256: 4a1d2005153b9454fc21c9bad1b539df189905be49e851ec62a6212c2e045381
   md5: 2a2170a3e5c9a354d09e4be718c43235

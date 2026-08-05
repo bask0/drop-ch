@@ -1,4 +1,7 @@
-"""This module contains functions for preprocessing geospatial data, including zonal statistics, reprojecting datasets, reading RDS files, and extracting features from raster data."""
+"""This module contains functions for preprocessing geospatial data, including zonal statistics, reprojecting datasets, reading RDS files, and extracting features from raster data.
+
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+"""
 
 import gzip
 import os
@@ -137,14 +140,14 @@ TIME_END = '2023-12-31'  # '1992-12-31'
 NUM_PAR = 60
 
 cm = gpd.read_file(
-    '/net/argon/landclim/kraftb/machflow_routing/data/raw/catchments_final').set_index('EZGNR')
+    '/path/to/raw_data/machflow_routing/data/raw/catchments_final').set_index('EZGNR')
 cm_geom = [(shapes, uid) for shapes, uid in zip(cm.geometry, cm.index)]
 stations = gpd.read_file(
-    '/net/argon/landclim/kraftb/machflow_routing/data/processed/hydro_ch/'
+    '/path/to/raw_data/machflow_routing/data/processed/hydro_ch/'
     'Inventory_discharge_hydroCH_manually_cleaned.gpkg'
 )
 dams = gpd.read_file(
-    '/net/argon/landclim/kraftb/machflow_routing/data/processed/management/dams.gpkg'
+    '/path/to/raw_data/machflow_routing/data/processed/management/dams.gpkg'
 )
 
 # Temperature
@@ -260,11 +263,11 @@ def predict(ds: xr.Dataset, fit: MPL):
 ref = xr.open_dataset(
     '/net/iacmeteo/sma/MeteoCH_gridded/RhiresD/RhiresD_ch01h.swiss.lv95_202301010000_202312310000.nc'
 ).drop_vars(['lon', 'lat']).rename({'E': 'x', 'N': 'y'}).rio.write_crs(cm.crs).RhiresD.isel(time=-1)
-dem = xr.open_dataset('/net/argon/landclim_nobackup/kraftb/data/merit/merit.zarr').rio.write_crs('EPSG:4326')
+dem = xr.open_dataset('/path/to/raw_data/data/merit/merit.zarr').rio.write_crs('EPSG:4326')
 dem = reproject_like(x=dem[['elv']], ref=ref, resampling=enums.Resampling.bilinear)
 
 product = 'TabsD'
-intermediate_path = Path('/net/argon/landclim/kraftb/machflow_routing/data/intermediate/')
+intermediate_path = Path('/path/to/raw_data/machflow_routing/data/intermediate/')
 model_save_name = intermediate_path / f'fit_model_{product}.joblib'
 model_means_name = intermediate_path / f'fit_model_{product}_mean.nc'
 model_stds_name = intermediate_path / f'fit_model_{product}_std.nc'
@@ -462,7 +465,7 @@ def raster_to_hrus_prevah(time, return_prevah_grid=False):
     time_flat = time.replace('-', '')
 
     tar_path = Path(
-        f'/net/argon/landclim/kraftb/machflow_routing/data/raw/prevah_500/compressed/wsl2zero_{time_flat}.tgz'
+        f'/path/to/raw_data/machflow_routing/data/raw/prevah_500/compressed/wsl2zero_{time_flat}.tgz'
     )
 
     if not tar_path.exists():
@@ -609,7 +612,7 @@ side_stations = [
 # Remove stations.
 gdf = stations[~stations['ID'].isin(side_stations)]
 
-base_path = Path('/net/argon/landclim/kraftb/machflow_routing/data/raw/hydro_ch/DischargeDBHydroCH')
+base_path = Path('/path/to/raw_data/machflow_routing/data/raw/hydro_ch/DischargeDBHydroCH')
 
 df_dict = {}
 no_overlay = []
@@ -751,7 +754,7 @@ print(f'No overlay for {len(no_overlay)} dams: {no_overlay}')
 print('Processing MERIT')
 
 merit = xr.open_dataset(
-    '/net/argon/landclim_nobackup/kraftb/data/merit/merit.nc').rio.write_crs(
+    '/path/to/raw_data/data/merit/merit.nc').rio.write_crs(
         'EPSG:4326').rename({'lat': 'y', 'lon': 'x'})
 merit = merit.rio.reproject(
     cm.crs, resolution=(50, 50), resampling=enums.Resampling.bilinear).rename({'elv': 'dem'})
@@ -786,7 +789,7 @@ cm = zonal_aggregate(zones, merit.aspect, join_df=cm, stats_func={'mean': circul
 print('Processing SOILGRIDS')
 
 soilgrids = xr.open_dataset(
-    '/net/argon/landclim_nobackup/kraftb/data/soilgrids/soilgrids.nc'
+    '/path/to/raw_data/data/soilgrids/soilgrids.nc'
 ).rio.write_crs('EPSG:4326').rename({'lat': 'y', 'lon': 'x'})
 soilgrids = soilgrids.where(soilgrids >= 0, 0).compute()
 soilgrids = soilgrids.rio.reproject(cm.crs, resolution=(50, 50), resampling=enums.Resampling.bilinear)
@@ -814,7 +817,7 @@ for data_var in soilgrids.data_vars:
 print('Processing CORINE')
 
 corine = rxr.open_rasterio(
-    '/net/argon/landclim_nobackup/kraftb/data/corine/raw/U2018_CLC2018_V2020_20u1.tif').isel(band=0).drop_vars('band')
+    '/path/to/raw_data/data/corine/raw/U2018_CLC2018_V2020_20u1.tif').isel(band=0).drop_vars('band')
 
 corine_reclass = xr.full_like(corine, fill_value=np.nan, dtype=np.float32)
 
@@ -863,7 +866,7 @@ for key, values in corine_class_map.items():
 
 print('Cleaning polygon data.')
 
-base_path = Path('/net/argon/landclim/kraftb/machflow_routing/')
+base_path = Path('/path/to/raw_data/machflow_routing/')
 rivers = gpd.read_file(base_path / 'data/raw/rivernet/rivernet.shp')
 rivers = gpd.sjoin(rivers, cm, how='left', predicate='intersects')
 rivers = rivers.unary_union.intersection(cm.unary_union)
@@ -1000,7 +1003,7 @@ for data_var in ds.data_vars:
         'chunks': chunking
     }
 
-out_path = Path('/net/argon/landclim/kraftb/machflow_routing/data/processed/harmonized_hru_data.zarr')
+out_path = Path('/path/to/raw_data/machflow_routing/data/processed/harmonized_hru_data.zarr')
 
 if out_path.exists():
     shutil.rmtree(out_path, )

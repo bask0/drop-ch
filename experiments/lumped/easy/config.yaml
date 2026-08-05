@@ -5,4 +5,4 @@ data:
 
 tuning_engine:
   exp_dir: experiments/lumped/easy
-  log_dir: /cluster/work/climate/kraftb/streamflow_net/lumped/easy
+  log_dir: ${log_root}/lumped/easy

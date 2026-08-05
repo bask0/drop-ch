@@ -5,9 +5,9 @@ data:
 
 tuning_engine:
   exp_dir: experiments/instant/easy
-  log_dir: /cluster/work/climate/kraftb/streamflow_net/instant/easy
+  log_dir: ${log_root}/instant/easy
 
 model:
   class_path: project.nn.streamflow_net.StreamflowNet
   init_args:
-    runoff_net_exp_dir: /cluster/work/climate/kraftb/streamflow_net/prevah
+    runoff_net_exp_dir: ${log_root}/prevah

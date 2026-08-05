@@ -185,13 +185,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--root",
         type=str,
-        default="/cluster/work/climate/kraftb/streamflow_net/",
+        required=True,
         help="Root directory to search for preds.zarr files.",
     )
     parser.add_argument(
         "--base_path",
         type=str,
-        default="/cluster/work/climate/kraftb/data/machflow_routing/processed/harmonized_hru_data.zarr",
+        required=True,
         help="Path to the base dataset containing area information.",
     )
     parser.add_argument(
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_path",
         type=str,
-        default="/cluster/work/climate/kraftb/streamflow_net/predictions_revision.zarr",
+        required=True,
         help="Path to save the combined dataset.",
     )
 

@@ -25,6 +25,7 @@ pip-wheel-metadata/
 
 # === PyTorch Lightning ===
 logs/
+logs_test
 **/logs
 **/logs/
 checkpoints/

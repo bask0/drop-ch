@@ -536,7 +536,7 @@ class TuningEngine:
 
         # Combine base config paths and overrides for LightningCLI
         cli = CLI(
-            parser_kwargs=dict(default_config_files=config_files, parser_mode="omegaconf"),
+            parser_kwargs=dict(default_config_files=config_files, parser_mode="omegaconf+"),
             save_config_kwargs={"overwrite": True},
             trainer_defaults=trainer_defaults,
             # Pass hyperparameters as CLI overrides

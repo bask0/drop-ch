@@ -8,9 +8,9 @@
 #SBATCH --gpus=nvidia_geforce_rtx_4090:1
 #SBATCH --output=slurm_logs/%j.out
 
-module load eth_proxy
-module load stack/2024-06 gcc/12.2.0
-module load cuda/12.8.0
+module load eth_proxy  # remove/replace if not on ETH Euler
+module load stack/2024-06 gcc/12.2.0  # adjust for your cluster's module system
+module load cuda/12.8.0  # adjust for your cluster's module system
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
