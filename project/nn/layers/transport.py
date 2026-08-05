@@ -98,7 +98,7 @@ class TransportNet(torch.nn.Module):
         self.act_0 = torch.nn.LeakyReLU()
 
         if self.dynamic:
-            self.dynamic_modulation = torch.nn.Linear(in_features=1, out_features=2 * self.hidden_size)
+            self.dynamic_modulation = torch.nn.Linear(in_features=1, out_features=self.hidden_size)
 
         linear_out = torch.nn.Linear(in_features=self.hidden_size, out_features=1)
         torch.nn.init.constant_(linear_out.bias, math.log(initial_retention / (1 - initial_retention)))
@@ -147,8 +147,8 @@ class TransportNet(torch.nn.Module):
         """
 
         d_transformed = torch.log(1e-7 + d) + 5.0
-        gamma, beta = self.dynamic_modulation(d_transformed).chunk(2, dim=-1)
-        x_enc = x_enc * (1 + gamma) + beta
+        d_enc = self.dynamic_modulation(d_transformed)
+        x_enc = x_enc + d_enc
 
         return x_enc
 

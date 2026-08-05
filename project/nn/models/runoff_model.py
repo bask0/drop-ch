@@ -221,6 +221,6 @@ class RunoffModel(torch.nn.Module):
         # Only applies if the model was trained on normalized runoff
         if scale_output:
             q = self.norm.norm_targets(q, invert=True)  # No-op if normalization is disabled.
+            q = q.clamp(min=0.0, max=1e4)  # guard against overflow from extreme LSTM outputs
 
         return q
- 

@@ -56,7 +56,7 @@ class EvaporationModel(torch.nn.Module):
         alpha_exp = torch.exp(self.alpha)  # Exponentiate alpha to ensure it's positive
         beta_softplus = torch.nn.functional.softplus(self.beta)  # Ensure beta is positive
         T_20 = torch.clamp(T / 20, min=1e-2)  # Use reference of 20°C, set negative to a small positive value.
-        e_mmd = alpha_exp * T_20 ** beta_softplus  # Evaporation in mm/d
+        e_mmd = alpha_exp * T_20**beta_softplus  # Evaporation in mm/d
 
         if not self.return_m3s:
             return e_mmd

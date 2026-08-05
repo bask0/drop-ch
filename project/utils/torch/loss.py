@@ -602,8 +602,34 @@ class QLoss(torch.nn.Module):
 
         upstream_area = batch.upstream_area[eval_subset].unsqueeze(-1)
 
+        # Ensure upstream_area is valid (no NaN, inf, or zero values)
+        if not torch.isfinite(upstream_area).all() or (upstream_area <= 0).any():
+            zero_loss = (y_hat * 0.0).mean()
+            log_loss = {
+                "total_loss": zero_loss,
+                "loss": zero_loss,
+                "water_freq_loss": zero_loss,
+                "water_freq_loss_weight": zero_loss,
+            }
+            return zero_loss, log_loss
+
         y_hat = convert_m3s_to_mmd(y_hat[eval_subset, context_length:, 0], upstream_area)
         y = convert_m3s_to_mmd(batch.y[eval_subset, context_length:, 0], upstream_area)
+
+        # Clamp extreme/infinite values after conversion to prevent overflow in loss
+        y_hat = torch.clamp(y_hat, min=0.0, max=1e6)
+        y = torch.clamp(y, min=0.0, max=1e6)
+
+        # If target has all NaN/inf, skip this batch
+        if not torch.isfinite(y).any():
+            zero_loss = (y_hat * 0.0).mean()
+            log_loss = {
+                "total_loss": zero_loss,
+                "loss": zero_loss,
+                "water_freq_loss": zero_loss,
+                "water_freq_loss_weight": zero_loss,
+            }
+            return zero_loss, log_loss
 
         if self.loss_fun.criterion == "nse":
             q_std = batch.q_std[eval_subset].unsqueeze(-1)
@@ -626,21 +652,26 @@ class QLoss(torch.nn.Module):
                 "with `use_water_freq_constraint=True`, `x_retention` must be passed to `get_loss`."
             )
 
-            weight = torch.exp(
-                x_retention.new_tensor(-self.lake_constraint_rate_constant * step)
-            )
-            water_freq = batch.water_freq[subset] if mode == "train" else batch.water_freq
-            hru_area = batch.hru_area[subset] if mode == "train" else batch.hru_area
+            weight = torch.exp(x_retention.new_tensor(-self.lake_constraint_rate_constant * step))
+            is_lake = batch.is_lake[subset] if mode == "train" else batch.is_lake
 
-            owa = water_freq * hru_area
-            owa_sum = owa.sum()
-            if owa_sum > 0:
-                owa_norm = owa / owa_sum
-                water_freq_loss = torch.nn.functional.relu(
-                    x_retention.mean() - (x_retention * owa_norm).sum() + self.lake_constraint_margin
-                )
-            else:
-                water_freq_loss = x_retention.new_zeros(())
+            # # Penalize lakes if retention < 0.5, non-lakes if retention > 0.1
+            # t0 = torch.nn.functional.relu(-x_retention + 0.5)
+            # t1 = torch.nn.functional.relu(x_retention - 0.1)
+            # water_freq_loss = torch.where(is_lake > 0.5, t0, t1)
+
+            # # Average loss only over HRUs with lakes
+            # water_freq_loss = (
+            #     water_freq_loss[is_lake == 1.0].mean()
+            #     if is_lake.any()
+            #     else water_freq_loss.new_zeros(())
+            # )
+
+            # Penalize lakes if retention < 0.5
+            water_freq_loss = torch.nn.functional.relu(-x_retention + 0.5)
+
+            # Average loss only over HRUs with lakes
+            water_freq_loss = water_freq_loss[is_lake == 1.0].mean() if is_lake.any() else water_freq_loss.new_zeros(())
 
         else:
             weight = 0.0
