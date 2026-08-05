@@ -28,13 +28,6 @@ argument_parser.add_argument(
     help='Path to the optuna tune database.'
 )
 argument_parser.add_argument(
-    '--pretrained_run_dir',
-    type=str,
-    required=False,
-    default='/cluster/work/climate/kraftb/runs/pretraining/',
-    help='Path to the pretrained runoff model directory.'
-)
-argument_parser.add_argument(
     '--hru',
     type=int,
     required=False,
@@ -100,9 +93,9 @@ def main(args) -> None:
 
     snet = StreamflowNet.load_from_checkpoint(
         checkpoint_path,
-        runoff_net_exp_dir=args.pretrained_run_dir,
         map_location=device
     )
+    snet.eval()
 
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -187,8 +180,12 @@ def main(args) -> None:
         batch_device.tair = batch.tair[:, start:end]
         batch_device.to(device)
 
-        # Run model.
-        Q, q, e, _ = snet.routing_forward(batch_device)
+        # Run model with full gradient graph (prec -> runoff_net -> q -> routing_net -> Q).
+        q = snet.runoff_net.chunked_forward(batch=batch_device, scale_output=True, subset=None)
+        q = snet.convert_q_to_m3s(q, batch_device)
+        e = snet.evaporation_net(T=batch_device.tair, area=batch_device.hru_area,
+                                 water_freq=batch_device.water_freq, subset=None)
+        Q, *_ = snet.routing_net.route(batch=batch_device, q=q, e=e, subset=None)
 
         if i == 0:
             ds_dummy_region = ds_dummy.isel(time=slice(0, time_warmup))

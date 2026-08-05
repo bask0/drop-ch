@@ -20,13 +20,14 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
-def get_pred_data_structure(root: str) -> dict[str, str]:
+def get_pred_data_structure(root: str, exclude_dirs: list[str]) -> dict[str, str]:
     """Get a dictionary with the structure of the prediction data.
 
     The structure is assumed to be root/model/setup/preds.zarr
 
     Args:
         root (str): The root directory to search for preds.zarr files.
+        exclude_dirs (list[str]): A list of directory names to exclude from the search.
 
     Returns:
         dict: A dictionary with keys as "model_setup" and values as the path to the preds.zarr file.
@@ -34,7 +35,7 @@ def get_pred_data_structure(root: str) -> dict[str, str]:
 
     out = {}  # plain dict -> values are strings
     for p in Path(root).rglob("preds.zarr"):
-        if not p.is_dir() or "pretraining" in p.parts:
+        if not p.is_dir() or any(exclude in p.parts for exclude in exclude_dirs):
             continue
         setup = p.parents[2].name
         model = p.parents[3].name
@@ -121,7 +122,7 @@ def complete_units(ds: xr.Dataset, base_ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def main(pred_root: str, base_path: str, out_path: str) -> None:
+def main(pred_root: str, base_path: str, out_path: str, exclude_dirs: list[str]) -> None:
     """Combine prediction results from different models and setups into a single dataset.
 
     The structure is assumed to be root/model/setup/xval/preds.zarr
@@ -130,9 +131,10 @@ def main(pred_root: str, base_path: str, out_path: str) -> None:
         pred_root (str): The root directory to search for preds.zarr files.
         base_path (str): The path to the base dataset containing area information.
         out_path (str): The path to save the combined dataset.
+        exclude_dirs (list[str]): A list of directory names to exclude from the search.
     """
 
-    data_layout = get_pred_data_structure(pred_root)
+    data_layout = get_pred_data_structure(pred_root, exclude_dirs)
     base_ds = xr.open_zarr(base_path)
 
     datasets = []
@@ -193,6 +195,13 @@ if __name__ == "__main__":
         help="Path to the base dataset containing area information.",
     )
     parser.add_argument(
+        "--exclude_dirs",
+        type=str,
+        nargs="*",
+        default=["prevah"],
+        help="List of directory names to exclude from the search.",
+    )
+    parser.add_argument(
         "--out_path",
         type=str,
         default="/cluster/work/climate/kraftb/streamflow_net/predictions_revision.zarr",
@@ -203,6 +212,6 @@ if __name__ == "__main__":
 
     logger.info(f"Combining predictions from root: {args.root}")
 
-    main(args.root, args.base_path, args.out_path)
+    main(args.root, args.base_path, args.out_path, args.exclude_dirs)
 
     logger.info(f"Combined predictions written to: {args.out_path}")
