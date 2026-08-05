@@ -1104,8 +1104,7 @@ class GraphDataModule(pl.LightningDataModule):
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
         val_time_range: list[str] | None = None,
         skip_data_init: bool = False,
-        curriculum_start_area: float = 0.0,
-        curriculum_ramp_epochs: int = 0,
+
     ) -> None:
         """
         Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
@@ -1232,9 +1231,6 @@ class GraphDataModule(pl.LightningDataModule):
         self.prediction_length = prediction_length
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.curriculum_start_area = curriculum_start_area
-        self.curriculum_ramp_epochs = curriculum_ramp_epochs
-        self._curriculum_max_area = float(ds["upstream_area"].max().values) if not skip_data_init else 0.0
 
         if skip_data_init:
             self.has_obs = None
@@ -1295,16 +1291,12 @@ class GraphDataModule(pl.LightningDataModule):
     def get_dataset(
         self,
         stage: Literal["init", "train", "valid", "test", "pred"],
-        max_upstream_area: float | None = None,
     ) -> HRUData:
         """
         Generate a dataset instance for the specified training or evaluation stage.
 
         Args:
             stage (Literal['init', 'train', 'valid', 'test', 'pred']): Stage for which the dataset is being generated.
-            max_upstream_area (float | None): If set, restricts training samples to HRUs whose upstream_area
-                is below this threshold (spatial curriculum). Only applied when stage is 'train'. None means
-                no filtering.
 
         Returns:
             HRUData: A dataset configured for the given stage.
@@ -1314,11 +1306,7 @@ class GraphDataModule(pl.LightningDataModule):
 
         if stage in ["init", "train"]:
             has_obs = (self.has_obs * self.ds.hru.isin(self.train_hrus)).compute()
-            if max_upstream_area is not None:
-                small_enough = has_obs & (self.ds["upstream_area"] < max_upstream_area)
-                hru_samples = self.ds.hru.where(small_enough, drop=True).values.tolist()
-            else:
-                hru_samples = None
+            hru_samples = None
             temporal_context_length = self.temporal_context_length
             prediction_length = self.prediction_length
         elif stage == "valid":
@@ -1362,16 +1350,7 @@ class GraphDataModule(pl.LightningDataModule):
             DataLoader: A PyTorch DataLoader for the training dataset.
         """
 
-        max_upstream_area = None
-        if self.curriculum_ramp_epochs > 0 and self.curriculum_start_area > 0:
-            frac = min(1.0, self.trainer.current_epoch / self.curriculum_ramp_epochs)
-            if frac < 1.0:
-                max_upstream_area = (
-                    self.curriculum_start_area
-                    + (self._curriculum_max_area - self.curriculum_start_area) * frac
-                )
-
-        train_dataset = self.get_dataset(stage="train", max_upstream_area=max_upstream_area)
+        train_dataset = self.get_dataset(stage="train")
         if self.aggregate_catchments:
             DataloaderClass = DataLoader
         else:
@@ -1543,6 +1522,10 @@ class HRUDataModule(pl.LightningDataModule):
         load_ds_to_memory: bool = True,
         num_folds: int = 1,  # Keep for compatibility, not used in this class.
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
+        skip_data_init: bool = False,  # Keep for compatibility with tune.py.
+        k_hops: int = 10,  # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
+        val_time_range: list[str]
+        | None = None,  # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
     ) -> None:
         """
         Initialize the HRUDataModule.
@@ -1570,7 +1553,7 @@ class HRUDataModule(pl.LightningDataModule):
 
         self.ds = xr.open_zarr(data_path)
 
-        if load_ds_to_memory:
+        if load_ds_to_memory and not skip_data_init:
             self.ds.load()  # TODO: Load only needed variables.
 
         self.pred_hrus, self.train_hrus, self.valid_hrus, self.test_hrus = HRUSplitter(ds=self.ds).compute()
@@ -1584,6 +1567,14 @@ class HRUDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
+        if skip_data_init:
+            self.has_obs = None
+            self.norm_args_dyn_features = None
+            self.norm_args_stat_features = None
+            self.norm_args_stat_routing_features = None
+            self.norm_args_targets = None
+            return
+
         self.has_obs = self.ds.q_prevah_mmd.notnull().any("time").compute()
 
         # Get train dataset.
@@ -1593,12 +1584,7 @@ class HRUDataModule(pl.LightningDataModule):
 
         self.norm_args_stat_features = Normalizer.make_kwargs(ds=train_dataset.ds, norm_variables=self.stat_features)
 
-        if norm_targets:
-            self.norm_args_targets = Normalizer.make_kwargs(
-                ds=train_dataset.ds, norm_variables=self.targets, log_transform=True, epsilon=1.0
-            )
-        else:
-            self.norm_args_targets = NoNormalizer.make_kwargs()
+        self.norm_args_stat_routing_features = None
 
         if norm_targets:
             self.norm_args_targets = LogXp.make_kwargs(
@@ -1683,7 +1669,7 @@ class HRUDataModule(pl.LightningDataModule):
         val_dataset = self.get_dataset(stage="valid")
         return DataLoader(
             dataset=val_dataset,
-            batch_size=self.batch_size,
+            batch_size=self.batch_size // 4,
             shuffle=False,
             collate_fn=collate_dataclass,
             num_workers=self.num_workers,
@@ -1738,6 +1724,10 @@ class HRUDataModule(pl.LightningDataModule):
             return 0
 
         return len(self.stat_features)
+
+    @property
+    def num_stat_routing_features(self) -> int:
+        return 0
 
     @property
     def num_dyn_features(self) -> int:
