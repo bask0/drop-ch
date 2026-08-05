@@ -73,7 +73,34 @@ submit_split() {
     echo "$ALL_JOBS"
 }
 
-# ── LUMPED (sequential splits: each waits for previous tune to finish) ────────
+# ── PREVAH (single run, no splits — feeds all routed/instant experiments) ─────
+echo "=== Submitting prevah ==="
+PREVAH_CONFIG_ARGS=(
+    -c experiments/base_config.yaml
+    -c experiments/prevah/config.yaml
+)
+PREVAH_TUNE_ARGS=(pixi run python tune.py "${PREVAH_CONFIG_ARGS[@]}")
+PREVAH_INIT_JOB=$(sbatch --parsable \
+    "${SBATCH_ARGS[@]}" \
+    slurm/srun_cuda.sh \
+    "${PREVAH_TUNE_ARGS[@]}" \
+    --tuning_engine.overwrite=True)
+echo "prevah init job: $PREVAH_INIT_JOB" >&2
+PREVAH_RESUME_CMD="sleep 120 && ${PREVAH_TUNE_ARGS[*]} --tuning_engine.resume=True"
+PREVAH_ALL_JOBS=$PREVAH_INIT_JOB
+for i in $(seq 2 $N_WORKERS); do
+    JOB_ID=$(sbatch --parsable \
+        "${SBATCH_ARGS[@]}" \
+        --dependency=after:$PREVAH_INIT_JOB \
+        slurm/srun_cuda.sh \
+        bash -c "$PREVAH_RESUME_CMD")
+    echo "prevah worker $i: $JOB_ID" >&2
+    PREVAH_ALL_JOBS="$PREVAH_ALL_JOBS:$JOB_ID"
+done
+PREVAH_DONE=$PREVAH_ALL_JOBS
+sleep 2
+
+# ── LUMPED (runs in parallel with prevah — independent baseline) ───────────────
 echo "=== Submitting lumped ==="
 LUMPED_RANDOM_TUNE=$(submit_split lumped random)
 sleep 2
@@ -82,12 +109,9 @@ sleep 2
 LUMPED_HARD_TUNE=$(submit_split lumped hard   "$LUMPED_EASY_TUNE")
 sleep 2
 
-# routed/instant need lumped's pretrained weights (saved during tuning, not xval)
-LUMPED_DONE=$LUMPED_HARD_TUNE
-
-# ── ROUTED (sequential splits, starts after lumped tune is done) ──────────────
+# ── ROUTED (sequential splits, starts after prevah tune is done) ──────────────
 echo "=== Submitting routed ==="
-ROUTED_RANDOM_TUNE=$(submit_split routed random "$LUMPED_DONE")
+ROUTED_RANDOM_TUNE=$(submit_split routed random "$PREVAH_DONE")
 sleep 2
 ROUTED_EASY_TUNE=$(submit_split routed easy   "$ROUTED_RANDOM_TUNE")
 sleep 2

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 N_WORKERS=24
-JOB_NAME=sf_net
+JOB_NAME=routed_net
 
 LOGDIR="slurm_logs/$JOB_NAME"
 
@@ -23,6 +23,7 @@ for SPLIT in random hard; do
         -c experiments/routed/config.yaml
         -c experiments/routed/$SPLIT/config.yaml
         # -c experiments/fast_dev_run_config.yaml
+        # -c experiments/routed/best_hps.yaml
     )
 
     TUNE_ARGS=(pixi run python tune.py "${CONFIG_ARGS[@]}")

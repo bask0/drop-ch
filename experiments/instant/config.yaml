@@ -1,7 +1,7 @@
 model:
   class_path: project.nn.streamflow_net.StreamflowNet
   init_args:
-    runoff_net_exp_dir: /cluster/work/climate/kraftb/streamflow_net/lumped
+    runoff_net_exp_dir: /cluster/work/climate/kraftb/streamflow_net/prevah
     runoff_use_pretrained: true
     use_instant_routing: true
     runoff_lr: 0.0001
@@ -16,7 +16,7 @@ model:
     lake_constraint_rate_constant: 0.1
     num_samples_per_graph: 20
     gradient_accumulation_steps: 2
-    max_q_chunk_size: 200
+    max_q_chunk_size: 20
 
 data:
   class_path: project.data.datamodule.GraphDataModule
@@ -31,26 +31,14 @@ data:
       -  bdod_mean
       -  cfvo_mean
       -  clay_mean
-      -  dam_height
       -  forests_freq
       -  glaciers_freq
-      -  height_max
       -  height_mean
-      -  height_min
-      -  impoundment_level
-      -  impoundment_volume
-      -  is_barrage
-      -  is_floodcontrol
-      -  is_hydroelectricity
       -  is_lake
-      -  is_other_aim
-      -  is_regulated_lake
-      -  is_storage_dam
       -  sand_mean
       -  shrubs_freq
       -  silt_mean
       -  slope_mean
-      -  upstream_area
       -  water_freq
       -  wetlands_freq
     stat_routing_features:
@@ -79,8 +67,7 @@ data:
     batch_size: 1
     num_workers: 8
     val_time_range: ["1990-01-01", "1999-12-31"]
-    curriculum_start_area: 100.0
-    curriculum_ramp_epochs: 30
+
 
 trainer:
   max_epochs: 200
@@ -101,8 +88,9 @@ tuning_engine:
   sampler:
     class_path: optuna.samplers.TPESampler
     init_args:
-      n_startup_trials: 12
+      n_startup_trials: 8
       multivariate: True
+      constant_liar: True
       n_ei_candidates: 64
 
   pruner:

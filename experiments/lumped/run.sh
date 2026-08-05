@@ -1,7 +1,7 @@
 #!/bin/bash
 
 N_WORKERS=12
-JOB_NAME=sf_net
+JOB_NAME=lstm_net
 
 LOGDIR="slurm_logs/$JOB_NAME"
 
