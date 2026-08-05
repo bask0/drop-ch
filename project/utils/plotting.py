@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import xarray as xr
-import yaml
 from matplotlib.axes import Axes
 from matplotlib.colorbar import Colorbar
 from matplotlib.patches import Patch
@@ -23,22 +22,11 @@ from pyproj import CRS
 
 from project.utils.data import load_xval_test_set
 from project.utils.metrics import compute_metrics
-
-_PATHS_CONFIG = Path(__file__).resolve().parents[2] / "experiments" / "paths.yaml"
-
-
-def _get_hru_file() -> Path | None:
-    """Read `hru_file` from experiments/paths.yaml, if available."""
-    try:
-        with _PATHS_CONFIG.open() as f:
-            return Path(yaml.safe_load(f)["hru_file"])
-    except (FileNotFoundError, KeyError, TypeError):
-        return None
-
+from project.utils.paths import load_paths_config
 
 # TODO: Make this more flexible, but tuning_engine does not have access to data paths.
-_hru_file = _get_hru_file()
-HRU_FILE_CANDIDATES = [_hru_file] if _hru_file else []
+_hru_file = load_paths_config().get("hru_file")
+HRU_FILE_CANDIDATES = [Path(_hru_file)] if _hru_file else []
 
 
 def despine(ax: Axes, which: str = "L", remove_ticks: bool = False) -> None:

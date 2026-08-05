@@ -9,16 +9,18 @@ import torch
 # Import the module under test
 from project.data.datamodule import GraphDataModule
 from project.nn.runoff_net import RunoffNet
+from project.utils.paths import load_paths_config
 from project.utils.typing import HRUSample
 
 torch.manual_seed(0)
 np.random.seed(0)
 
-DATA_PATH = "/path/to/data/harmonized_hru_data.zarr"
+_data_root = load_paths_config().get("data_root", "/path/to/data")
+DATA_PATH = f"{_data_root}/harmonized_hru_data.zarr"
 
 pytestmark = pytest.mark.skipif(
     not os.path.exists(DATA_PATH),
-    reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit DATA_PATH to point to your data).",
+    reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit data_root in experiments/paths.yaml).",
 )
 
 
