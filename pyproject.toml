@@ -95,6 +95,9 @@ hooks-install = "pre-commit install"
 hooks-run     = "pre-commit run --all-files"
 setup         = { depends-on = ["hooks-install"], cmd = "echo pre-commit enabled" }
 
+[tool.ty.environment]
+python = ".pixi/envs/default"
+
 [tool.ruff]
 line-length = 120
 lint.extend-select = [
