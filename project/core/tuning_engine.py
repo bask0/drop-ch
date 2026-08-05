@@ -360,7 +360,13 @@ class TuningEngine:
 
         finally:
             if study is None:
-                raise ValueError("No study was created or loaded. Cannot proceed with finalizing runing.")
+                try:
+                    study = optuna.load_study(
+                        study_name=self.EXPERIMENT_NAME,
+                        storage=self._get_storage(db_path=self.tune_db),
+                    )
+                except Exception:
+                    raise ValueError("No study was created or loaded. Cannot proceed with finalizing running.")
 
             if len(study.trials) > n_trials_before:
                 logger.info(f"Creating summary plots in '{self.tune_dir}'...")

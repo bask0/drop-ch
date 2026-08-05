@@ -1,6 +1,7 @@
 """Defines the RoutingModel, a torch module with training routing for runoff prediction and routing."""
 
 from typing import Literal
+
 import torch
 from torch import Tensor
 from torch_geometric.data import Batch
@@ -20,13 +21,14 @@ class RoutingModel(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            num_inputs: int,
-            hidden_size: int = 16,
-            num_samples_per_graph: int = 10,
-            dynamic_modulation: bool = False,
-            num_time_subseteps: int = 1,
-            norm_args_stat_routing_features: dict | None = None) -> None:
+        self,
+        num_inputs: int,
+        hidden_size: int = 16,
+        num_samples_per_graph: int = 10,
+        dynamic_modulation: bool = False,
+        num_time_subseteps: int = 1,
+        norm_args_stat_routing_features: dict | None = None,
+    ) -> None:
         """Initialize the routing network model with specified hyperparameters.
 
         Args:
@@ -59,7 +61,7 @@ class RoutingModel(torch.nn.Module):
         """Compute sample indices for a batch by adding the batch mapping to the batch pointer offsets.
 
         Args:
-            batch: An object containing 'mapping' and 'ptr' attributes. 
+            batch: An object containing 'mapping' and 'ptr' attributes.
                 - batch.mapping (Tensor): Tensor indicating mapping indices for each sample in the batch.
                 - batch.ptr (Tensor): Tensor containing cumulative counts or offsets for batch samples.
 
@@ -80,15 +82,12 @@ class RoutingModel(torch.nn.Module):
         """
 
         chunk_indices = torch.split(
-            torch.arange(len(batch.batch), device=batch.batch.device),
-            self.num_samples_per_graph * 10)
+            torch.arange(len(batch.batch), device=batch.batch.device), self.num_samples_per_graph * 10
+        )
 
         return chunk_indices
 
-    def instant_route(
-            self,
-            batch,
-            q: Tensor) -> Tensor:
+    def instant_route(self, batch, q: Tensor) -> Tensor:
         """Compute the instant routed flow for each time step using the routing network.
 
         Args:
@@ -114,13 +113,13 @@ class RoutingModel(torch.nn.Module):
         return Q_store
 
     def route(
-            self,
-            batch,
-            q: Tensor,
-            e: Tensor,
-            subset: Tensor | None = None,
-            is_boundary: bool = False,
-            return_diagnostics: bool = False
+        self,
+        batch,
+        q: Tensor,
+        e: Tensor,
+        subset: Tensor | None = None,
+        is_boundary: bool = False,
+        return_diagnostics: bool = False,
     ) -> tuple[Tensor, Tensor | None, Tensor, SparseTensor, SparseTensor, Tensor, Tensor]:
         """Simulate routing process for a batch of streamflow data using the network's temporal and spatial encoding.
 
@@ -150,9 +149,7 @@ class RoutingModel(torch.nn.Module):
         """
 
         if (subset is None) and is_boundary:
-            raise AssertionError(
-                'with `is_boundary=True`, `subset` must be passed.'
-            )
+            raise AssertionError("with `is_boundary=True`, `subset` must be passed.")
 
         is_update_with_subset = (not is_boundary) & (subset is not None)
 
@@ -163,8 +160,11 @@ class RoutingModel(torch.nn.Module):
         # Initialize storage tensors.
         St = torch.zeros_like(batch.y[:, 0, :])
         Q_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
-        S_store = torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype) \
-            if return_diagnostics else None
+        S_store = (
+            torch.ones(batch_size, seq_length * self.num_time_subseteps, 1, device=device, dtype=dtype)
+            if return_diagnostics
+            else None
+        )
 
         # Initialize diagnostic storage if requested.
         if return_diagnostics:
@@ -186,20 +186,16 @@ class RoutingModel(torch.nn.Module):
 
         # Transport matrices, static in time if not dynamic modulation.
         if not self.dynamic_modulation:
-            T, D, k, x_retention = self.tnet(
-                x_enc=x_enc,
-                downstream_aligner=downstream_aligner)
+            T, D, k, x_retention = self.tnet(x_enc=x_enc, downstream_aligner=downstream_aligner)
 
         # Iterate time dimension.
         for t in range(0, seq_length):
-
             # Scale inputs by number of sub-steps to conserve mass.
             qt = q[:, t, :] / self.num_time_subseteps
             et = e[:, t, :] / self.num_time_subseteps
 
             # Iterate sub-time dimension.
             for t_sub in range(self.num_time_subseteps):
-
                 # Select state subset if specified.
                 if is_update_with_subset:
                     St_s = St[subset]
@@ -215,8 +211,9 @@ class RoutingModel(torch.nn.Module):
                     T, D, k, x_retention = self.tnet(
                         x_enc=x_enc,
                         downstream_aligner=downstream_aligner,
-                        d=St_s.detach(),
-                        retention_prev=retention_prev.detach())
+                        d=St_s.detach(),  # TODO: better use S_plus_q_t here?
+                        retention_prev=retention_prev.detach(),
+                    )
 
                 # Compute inner time index.
                 inner_t = t * self.num_time_subseteps + t_sub
@@ -230,7 +227,7 @@ class RoutingModel(torch.nn.Module):
                     S_store[:, inner_t, :] = St
                 Q_store[:, inner_t, :] = Qt
 
-                retention_prev = x_retention
+                retention_prev = x_retention.squeeze(-1)
                 if return_diagnostics:
                     R_store[:, inner_t, 0] = x_retention
 
@@ -257,16 +254,16 @@ class RoutingModel(torch.nn.Module):
         # iterating through all parameters
         logger = self.logger
         if logger is None:
-            raise ValueError('`logger` must be set to log parameters.')
+            raise ValueError("`logger` must be set to log parameters.")
         experiment = logger.experiment  # type: ignore
 
         for name, param in self.tnet.named_parameters():
             experiment.add_histogram(name, param, self.current_epoch)
             if param.requires_grad:
                 if param.grad is not None:
-                    experiment.add_histogram(name + '.grad', param.grad, self.current_epoch)
+                    experiment.add_histogram(name + ".grad", param.grad, self.current_epoch)
 
-    def log_loss(self, loss: dict[str, Tensor], batch: Batch, mode: Literal['train', 'valid', 'test']) -> None:
+    def log_loss(self, loss: dict[str, Tensor], batch: Batch, mode: Literal["train", "valid", "test"]) -> None:
         """Log loss values for a given batch and mode.
 
         Args:
@@ -283,13 +280,13 @@ class RoutingModel(torch.nn.Module):
             - Batch size is determined differently for training and evaluation modes.
         """
 
-        if mode not in ('train', 'valid', 'test'):
-            raise ValueError('\'mode\' must be one of \'train\', \'valid\', or \'test\'.')
+        if mode not in ("train", "valid", "test"):
+            raise ValueError("'mode' must be one of 'train', 'valid', or 'test'.")
 
         self.log_dict(
-            {f'{mode}_{k}': v for k, v in loss.items()},
+            {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == 'train' else False,
+            on_step=True if mode == "train" else False,
             on_epoch=True,
-            batch_size=batch.batch_size if mode == 'train' else batch.has_obs.sum().item()  # type: ignore
+            batch_size=batch.batch_size if mode == "train" else batch.has_obs.sum().item(),  # type: ignore
         )
