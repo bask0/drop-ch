@@ -84,6 +84,12 @@ dist/
 *.log
 slurm_logs
 
+# === Pixi local environment/cache ===
+.pixi
+.pixi/
+.pixi-home/
+.pixi-cache/
+
 # === Ignore animations ===
 **/anim
 **/anims
