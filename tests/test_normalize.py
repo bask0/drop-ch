@@ -112,3 +112,23 @@ def test_unknown_transform_name_raises():
 
     with pytest.raises(ValueError, match="No valid transformation"):
         DataTansform(name="minmax")
+
+
+@pytest.mark.parametrize(
+    "make_kwargs",
+    [
+        lambda ds: Normalizer.make_kwargs(ds, norm_variables=["prec", "tair"]),
+        lambda ds: RobustStandardizer.make_kwargs(ds, norm_variables=["prec", "tair"]),
+        lambda ds: LogXp.make_kwargs(ds, norm_variables=["prec", "tair"], epsilon=1e-3, target_centering=True),
+    ],
+    ids=["normalizer", "robust_standardizer", "logXp-centered"],
+)
+def test_stats_from_lazily_loaded_data(ds, make_kwargs):
+    """Statistics are the same whether the dataset is in memory or loaded lazily (load_ds_to_memory=False)."""
+
+    lazy, in_memory = make_kwargs(ds.chunk({"hru": 5})), make_kwargs(ds)
+
+    assert lazy.keys() == in_memory.keys()
+    for key, value in in_memory.items():
+        # Chunked sums differ in the last digits.
+        assert lazy[key] == (pytest.approx(value) if isinstance(value, list) else value), key

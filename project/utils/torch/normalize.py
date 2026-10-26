@@ -538,7 +538,8 @@ class LogXp(torch.nn.Module):
 
             means = []
             for var in norm_variables:
-                mean = np.log(ds[var] + epsilon).mean().item()
+                # compute() first: with lazily loaded data (load_ds_to_memory=False) this is a dask array.
+                mean = np.log(ds[var] + epsilon).mean().compute().item()
 
                 means.append(mean)
         else:
