@@ -2,6 +2,7 @@
 
 # Streamflow-Net
 
+[![Tests](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
@@ -159,7 +160,7 @@ The tests run on small synthetic inputs and need neither the dataset nor a GPU. 
 - **Data splits and unit conversions.**
 - **Configuration:** every experiment config resolves through the CLI, and no machine-specific paths are tracked outside `experiments/paths.yaml`.
 
-Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found.
+Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found. The test suite and ruff run on every push to `main` and on every pull request (see the badge above); there, the two dataset tests are skipped.
 
 ## Citation
 
