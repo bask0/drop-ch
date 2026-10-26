@@ -20,7 +20,7 @@ class Normalizer(torch.nn.Module):
 
     Equations:
         - normalization: (x - mean(x_global)) / std(x_global)
-        - denormalization: x * std(x_global) + std(x_global)
+        - denormalization: x * std(x_global) + mean(x_global)
 
     Shapes:
         In the forward call, the input tensor is expected to be batched. For sample-level normalization,
@@ -109,7 +109,7 @@ class Normalizer(torch.nn.Module):
     def inverse_transform(self, x: Tensor, is_batched: bool = False) -> Tensor:
         """Denormalize input x.
 
-        Equation: x * std(x_global) + std(x_global)
+        Equation: x * std(x_global) + mean(x_global), followed by exp(x) - epsilon if `log_transform=True`.
 
         Args:
             x (Tensor): The input tensor to normalize. The stats (`means` and `stds`) are applied over dimension
@@ -123,10 +123,13 @@ class Normalizer(torch.nn.Module):
 
         means, stds = self._expand_stats_to_x(x=x, is_batched=is_batched)
 
+        x = x * stds + means
+
+        # Undo the log transform last, as it was applied first in `transform`.
         if self.log_transform:
             x = torch.exp(x) - self.epsilon
 
-        return x * stds + means
+        return x
 
     @staticmethod
     def make_kwargs(
@@ -357,7 +360,8 @@ class RobustStandardizer(torch.nn.Module):
         is_batched (bool): Whether the input Tensor x is a batch (first dim is batch dim) or a single sample.
         """
 
-        dim = self.dim + 1 if is_batched else self.dim
+        # Resolve negative `features_dim` against the unbatched dims, as in `Normalizer._expand_stats_to_x`.
+        dim = range(1, x.ndim)[self.dim] if is_batched else range(0, x.ndim)[self.dim]
         dims = tuple([slice(None, None) if d == dim else None for d in range(x.ndim)])
 
         q95s_expanded = self.q95s[dims]
@@ -496,7 +500,8 @@ class LogXp(torch.nn.Module):
         if self.means is None:
             raise ValueError("Cannot expand means as no means were registered.")
 
-        dim = self.dim + 1 if is_batched else self.dim
+        # Resolve negative `features_dim` against the unbatched dims, as in `Normalizer._expand_stats_to_x`.
+        dim = range(1, x.ndim)[self.dim] if is_batched else range(0, x.ndim)[self.dim]
         dims = tuple([slice(None, None) if d == dim else None for d in range(x.ndim)])
 
         means_expanded = self.means[dims]
