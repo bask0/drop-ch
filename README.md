@@ -15,9 +15,10 @@ DROP is a data-driven neural network architecture for modeling and routing strea
 
 Designed to capture spatial and temporal dynamics of runoff generation and flow routing, DROP leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components. In the code, the model is the class `DROP` in `project/nn/drop_model.py`.
 
-This repository contains the code accompanying the paper:
+This repository contains the code accompanying a paper on DROP.
 
-> **TODO:** authors, title, journal, year, DOI.
+> [!NOTE]
+> The reference to the paper will be added here once it is published.
 
 This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
@@ -81,7 +82,8 @@ pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 
 All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`.
 
-> **TODO:** where to download it (data repository, DOI).
+> [!NOTE]
+> The download location of the dataset will be added here once the paper is published.
 
 Alternatively, it can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
 
@@ -166,7 +168,8 @@ The notebooks in `analysis/` then produce the figures in `analysis/figures/`. St
 pixi run jupyter lab
 ```
 
-> **TODO:** which notebook produces which figure of the paper.
+> [!NOTE]
+> A mapping from the notebooks to the figures of the paper will be added once the paper is published.
 
 Some plotting utilities render via Plotly and require a local Chrome install:
 
@@ -193,7 +196,8 @@ Two tests use the real dataset at `data_root` and are skipped automatically if i
 
 ## Citation
 
-> **TODO:** BibTeX entry for the paper.
+> [!NOTE]
+> Citation information will be added here once the paper is published.
 
 ## License
 
