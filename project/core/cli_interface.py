@@ -32,6 +32,8 @@ from jsonargparse import namespace_to_dict
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.cli import LightningCLI
 
+from project.utils.paths import PATH_KEYS
+
 from .utils import PredictionWriter
 
 # Ignore anticipated PL warnings.
@@ -90,15 +92,11 @@ class CLI(LightningCLI):
         # Add LightningCLI args first
         super().add_arguments_to_parser(parser)
 
-        # Centralized path roots. Referenced from experiment configs via `${data_root}`/`${log_root}`
-        # interpolation (see experiments/paths.yaml) so that only these two values need editing
-        # per machine/user.
-        parser.add_argument("--data_root", type=str, help="Root directory containing input datasets.")
-        parser.add_argument("--log_root", type=str, help="Root directory for experiment logs and outputs.")
-        # Not used by the CLI itself (read directly by project/utils/plotting.py), but registered
-        # here so that experiments/paths.yaml can be passed as a `-c` config without jsonargparse
-        # rejecting the unrecognized key.
-        parser.add_argument("--hru_file", type=str, help="Path to the HRU geopackage file (used for plotting).")
+        # Centralized paths from experiments/paths.yaml. Experiment configs reference them via `${data_root}`/
+        # `${log_root}` interpolation. All keys are registered, including ones the CLI does not use itself, so that
+        # experiments/paths.yaml can be passed as a `-c` config without jsonargparse rejecting unknown keys.
+        for key, description in PATH_KEYS.items():
+            parser.add_argument(f"--{key}", type=str, help=description)
 
         # Avoid circular import
         from project.core.tuning_engine import TuningEngine

@@ -1,0 +1,31 @@
+# Centralized path configuration: template.
+#
+# Copy this file to experiments/paths.yaml (not tracked by git) and fill in your paths. That file is the only one you
+# need to edit to run on your own machine. Experiment configs derive their paths from `data_root`/`log_root` via
+# `${data_root}`/`${log_root}` interpolation; scripts, plotting, notebooks and tests read it through
+# `project/utils/paths.py`. The allowed keys are listed in `PATH_KEYS` there.
+
+# --- Training and evaluation ---------------------------------------------------------------------------------------
+
+# Directory containing harmonized_hru_data.zarr.
+data_root: /path/to/data
+# Directory for experiment outputs (checkpoints, Optuna databases, logs, predictions).
+log_root: /path/to/logs
+# HRU polygons, used for plotting and written by preprocessing. Not necessarily located under `data_root`.
+hru_file: /path/to/data/hrus/hrus.gpkg
+
+# --- Raw data (needed to rebuild the dataset with project/scripts/{download_data,preprocessing}.py) ------------------
+
+# Project raw data with raw/, processed/ and intermediate/ subdirectories. Also read by the analysis notebooks.
+raw_data_root: /path/to/raw_data
+# Geodata with merit/, soilgrids/ and corine/ subdirectories.
+geodata_root: /path/to/geodata
+# MeteoSwiss gridded data (TabsD/, RhiresD/, ...).
+meteoswiss_root: /path/to/MeteoCH_gridded
+# ERA5-Land, processed 0.1 degree data.
+era5land_root: /path/to/ERA5-Land/processed
+
+# --- Analysis notebooks ----------------------------------------------------------------------------------------------
+
+# Companion machflow project: CAMELS-CH (data/camels_ch/), stations (data/obs/) and benchmark runs (runs/).
+machflow_root: /path/to/machflow
