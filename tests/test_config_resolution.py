@@ -24,8 +24,10 @@ import yaml
 
 from project.core.cli_interface import CLI
 from project.core.tuning_engine import TuningEngine
+from project.utils.paths import load_paths_config
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[1] / "experiments"
+DATA_PATH = Path(load_paths_config().get("data_root", "/path/to/data")) / "harmonized_hru_data.zarr"
 
 
 def _discover_model_splits() -> list[tuple[str, str | None]]:
@@ -117,13 +119,17 @@ def test_config_chain_resolves_via_default_config_files(model: str, split: str |
     _assert_fully_resolved(cfg)
 
 
+@pytest.mark.skipif(
+    not DATA_PATH.exists(),
+    reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit data_root in experiments/paths.yaml).",
+)
 def test_example_config_instantiates():
     """Same config chain as slurm/example_minimal.sh, but fully instantiated (no `--print_config`).
 
     This is the one place that exercises `apply_on="instantiate"` link_arguments -- e.g. a typo'd
     source key there resolves silently to `None` at parse time and only fails once the model is
-    actually built. Uses fast_dev_run_config.yaml and skip_data_init=True, so it still never
-    touches the real dataset, but building the actual model/datamodule/trainer costs under a minute.
+    actually built. Uses fast_dev_run_config.yaml and skip_data_init=True, so the data is never
+    loaded, but the datamodule still opens the zarr store lazily, so the dataset must exist.
     """
     config_files = [*_config_files("lumped", "random"), "experiments/fast_dev_run_config.yaml"]
     args = []
