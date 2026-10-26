@@ -91,7 +91,7 @@ kaleido = "*"
 streamflow-net = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-export-environment = { description = "Export the current environment to environment.yml", cmd = "pixi workspace export conda-environment > environment.yml" }
+export-environment = { description = "Export the current environment to environment.yaml", cmd = "pixi workspace export conda-environment > environment.yaml" }
 hooks-install = "pre-commit install"
 hooks-run     = "pre-commit run --all-files"
 setup         = { depends-on = ["hooks-install"], cmd = "echo pre-commit enabled" }
