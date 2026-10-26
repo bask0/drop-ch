@@ -110,18 +110,17 @@ All scripts load it automatically. Run them with `bash` from the repository root
 | `routed` | StreamflowNet | Pretrained runoff model coupled with learned routing along the river network. |
 | `instant` | StreamflowNet | As `routed`, but with instantaneous routing (area-weighted summation), as an ablation. |
 
-`lumped`, `routed` and `instant` are run for three data splits: `easy` and `hard` hold out fixed sets of catchments for testing, `random` splits at random (see `project/data/splitting.py`).
+`lumped`, `routed` and `instant` are run for two data splits: `hard` holds out a fixed set of catchments for testing, `random` splits at random (see `project/data/splitting.py`). Configs for an additional `easy` split, with a different set of held-out catchments, are included but not used in the paper.
 
 ### Running
 
-Each experiment runs hyperparameter tuning first, then cross-validation with the best hyperparameters. `routed` and `instant` load the pretrained runoff model from `<log_root>/prevah`, so `prevah` has to be tuned before them.
+Each experiment runs hyperparameter tuning first, then cross-validation with the best hyperparameters. `prevah` is only tuned: `routed` and `instant` load its best model from `<log_root>/prevah` as their pretrained runoff model, so it has to be tuned before them.
 
 ```bash
 # 1. Pretrain the runoff model (no splits).
 pixi run python tune.py -c experiments/paths.yaml -c experiments/base_config.yaml -c experiments/prevah/config.yaml
-pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yaml -c experiments/prevah/config.yaml
 
-# 2. Any other experiment, for <model> in lumped, routed, instant and <split> in easy, hard, random.
+# 2. Any other experiment, for <model> in lumped, routed, instant and <split> in random, hard.
 pixi run python tune.py -c experiments/paths.yaml -c experiments/base_config.yaml \
     -c experiments/<model>/config.yaml -c experiments/<model>/<split>/config.yaml
 pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yaml \

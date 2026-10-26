@@ -27,7 +27,6 @@ for SPLIT in random hard; do
         -c experiments/routed/config.yaml
         -c experiments/routed/$SPLIT/config.yaml
         # -c experiments/fast_dev_run_config.yaml
-        # -c experiments/routed/best_hps.yaml
     )
 
     TUNE_ARGS=(pixi run python tune.py "${CONFIG_ARGS[@]}")

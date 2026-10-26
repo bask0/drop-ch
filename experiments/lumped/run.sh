@@ -19,7 +19,7 @@ SBATCH_ARGS=(
 
 PREV_XVAL_JOB=""
 
-for SPLIT in random easy hard; do
+for SPLIT in random hard; do
 
     CONFIG_ARGS=(
         -c experiments/paths.yaml
