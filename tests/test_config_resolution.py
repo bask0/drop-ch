@@ -23,10 +23,12 @@ import yaml
 
 from project.core.cli_interface import CLI
 from project.core.tuning_engine import TuningEngine
-from project.utils.paths import load_paths_config
+from project.utils.paths import PATHS_CONFIG, PATHS_TEMPLATE, dataset_path
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[1] / "experiments"
-DATA_PATH = Path(load_paths_config().get("data_root", "/path/to/data")) / "harmonized_hru_data.zarr"
+# Fall back to the template, so the config chain can be checked without a local experiments/paths.yaml.
+PATHS_FILE = (PATHS_CONFIG if PATHS_CONFIG.exists() else PATHS_TEMPLATE).relative_to(EXPERIMENTS_DIR.parent)
+DATA_PATH = dataset_path() if PATHS_CONFIG.exists() else None
 
 
 def _discover_model_splits() -> list[tuple[str, str | None]]:
@@ -47,7 +49,7 @@ MODEL_SPLITS = _discover_model_splits()
 
 
 def _config_files(model: str, split: str | None) -> list[str]:
-    files = ["experiments/paths.yaml", "experiments/base_config.yaml", f"experiments/{model}/config.yaml"]
+    files = [str(PATHS_FILE), "experiments/base_config.yaml", f"experiments/{model}/config.yaml"]
     if split is not None:
         files.append(f"experiments/{model}/{split}/config.yaml")
     return files
@@ -119,7 +121,7 @@ def test_config_chain_resolves_via_default_config_files(model: str, split: str |
 
 
 @pytest.mark.skipif(
-    not DATA_PATH.exists(),
+    DATA_PATH is None or not DATA_PATH.exists(),
     reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit data_root in experiments/paths.yaml).",
 )
 def test_example_config_instantiates():
