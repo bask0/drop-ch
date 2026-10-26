@@ -1,4 +1,4 @@
-"""Main entry point for tuning and cross validation."""
+"""Main entry point for tuning."""
 
 import sys
 
