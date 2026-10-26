@@ -71,7 +71,7 @@ pixi install
 This project uses [pixi](https://pixi.sh) for environment management.
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/bask0/streamflow-net.git
 cd streamflow-net
 pixi install
 pixi run setup  # optional: install the git hooks (ruff, nbstripout)
@@ -96,10 +96,10 @@ cp experiments/paths.example.yaml experiments/paths.yaml
 ```yaml
 data_root: /path/to/data          # directory containing harmonized_hru_data.zarr
 log_root: /path/to/logs           # experiment outputs (checkpoints, Optuna databases, logs, predictions)
-hru_file: /path/to/hrus.gpkg      # HRU polygons, used for plotting
+hru_file: /path/to/data/hrus/hrus.gpkg  # HRU polygons, used for plotting
 ```
 
-Experiment configs derive their paths from it via `${data_root}`/`${log_root}` interpolation; scripts, plotting and notebooks read it through `project/utils/paths.py`. The remaining keys are only needed to rebuild the dataset from raw data or for the analysis notebooks.
+Experiment configs derive their paths from it via `${data_root}`/`${log_root}` interpolation; scripts, plotting and notebooks read it through `project/utils/paths.py`. The remaining keys are only needed to rebuild the dataset from raw data or for the analysis notebooks. Keep all keys of the template in your copy, even unused ones with their placeholder values; the configuration accepts exactly these keys.
 
 ### SLURM
 
@@ -139,7 +139,13 @@ pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yam
     -c experiments/<model>/config.yaml -c experiments/<model>/<split>/config.yaml
 ```
 
-Adding `-c experiments/fast_dev_run_config.yaml` runs a tiny version (2 trials, 1 epoch, short sequences) to check the setup.
+Adding `-c experiments/fast_dev_run_config.yaml` runs a tiny version (2 trials, 1 epoch, short sequences) to check the setup. It writes to `<log_root>/fast_dev_run/`, so it never overwrites the results of real runs.
+
+The analysis notebooks `analysis/prevah_vs_runoff.ipynb` (comparison with PREVAH) and `analysis/hp_tune.ipynb` additionally need the cross-validation of `prevah`, which the other experiments do not:
+
+```bash
+pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yaml -c experiments/prevah/config.yaml
+```
 
 On a SLURM cluster, `bash run_all.sh` submits all experiments and splits in the right order, with several tuning workers per experiment (see [SLURM](#slurm) for the one-time setup). To sanity-check your setup with a single fast, low-resource job first:
 
@@ -149,7 +155,16 @@ bash slurm/example_minimal.sh
 
 ### Results and figures
 
-After the runs, `bash slurm/combine_predictions.sh` combines the cross-validation predictions of all experiments into `<log_root>/predictions_combined.zarr`. The notebooks in `analysis/` produce the figures in `analysis/figures/`.
+After the runs, two post-processing steps prepare the inputs of the notebooks:
+
+- `bash slurm/combine_predictions.sh` combines the cross-validation predictions of all experiments into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
+- `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb` and `analysis/sensitivity.ipynb`.
+
+The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Start Jupyter in the pixi environment with:
+
+```bash
+pixi run jupyter lab
+```
 
 > **TODO:** which notebook produces which figure of the paper.
 
@@ -171,7 +186,8 @@ The tests run on small synthetic inputs and need neither the dataset nor a GPU. 
 - **Runoff model:** chunked inference matches a single pass in outputs and gradients.
 - **Loss, metrics and normalization:** analytically known values (e.g. NSE, KGE), NaN masking and exact inverse transforms.
 - **Data splits and unit conversions.**
-- **Configuration:** every experiment config resolves through the CLI, and no machine-specific paths are tracked outside `experiments/paths.yaml`.
+- **Configuration:** every experiment config resolves through the CLI, test runs with `fast_dev_run_config.yaml` stay out of the real results, and no machine-specific paths are tracked outside `experiments/paths.yaml`.
+- **Checkpoints:** the best tuning checkpoint is found, also after moving a run directory.
 
 Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found. The test suite, ruff and a check that notebooks are committed without outputs run on every push to `main` and on every pull request (see the badge above); there, the tests that need the dataset or a local `experiments/paths.yaml` are skipped.
 
