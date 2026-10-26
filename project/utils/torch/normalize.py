@@ -7,6 +7,8 @@ import torch
 import xarray as xr
 from torch import Tensor
 
+from project.utils.typing import HRUSample
+
 TensorLike = np.ndarray[int, np.dtype[np.float32]] | torch.Tensor | list[float]
 
 
@@ -686,3 +688,89 @@ class DataTansform(torch.nn.Module):
         """Return a string representation of the DataTansform module."""
 
         return str(self.transform)
+
+
+class TorchNormalizer(torch.nn.Module):
+    """Bundle of the normalization transforms for each input group and the targets.
+
+    Each group without normalization arguments gets a no-op transform. Use:
+        - `norm_dyn_features(x)` for dynamic features.
+        - `norm_stat_features(x)` for static features.
+        - `norm_stat_routing_features(x)` for static routing features.
+        - `norm_targets(x)` for targets; pass `invert=True` to denormalize.
+
+    """
+
+    def __init__(
+        self,
+        norm_args_dyn_features: dict | None = None,
+        norm_args_stat_features: dict | None = None,
+        norm_args_stat_routing_features: dict | None = None,
+        norm_args_targets: dict | None = None,
+    ) -> None:
+        """Initialize the transforms from the normalization arguments computed by the data module.
+
+        Args:
+            norm_args_dyn_features: normalization arguments for dynamic features, defaults to None.
+            norm_args_stat_features: normalization arguments for static features, defaults to None.
+            norm_args_stat_routing_features: normalization arguments for static routing features, defaults to None.
+            norm_args_targets: normalization arguments for targets, defaults to None.
+        """
+
+        super().__init__()
+
+        if norm_args_dyn_features is not None:
+            self.norm_dyn_features = DataTansform(**norm_args_dyn_features)
+        else:
+            self.norm_dyn_features = NoNormalizer()
+
+        if norm_args_stat_features is not None:
+            self.norm_stat_features = DataTansform(**norm_args_stat_features)
+        else:
+            self.norm_stat_features = NoNormalizer()
+
+        if norm_args_stat_routing_features is not None:
+            self.norm_stat_routing_features = DataTansform(**norm_args_stat_routing_features)
+        else:
+            self.norm_stat_routing_features = NoNormalizer()
+
+        if norm_args_targets is not None:
+            self.norm_targets = DataTansform(**norm_args_targets)
+        else:
+            self.norm_targets = NoNormalizer()
+
+    def normalize_inputs(self, batch: HRUSample) -> HRUSample:
+        """Normalize the input data in the batch.
+
+        Parameters
+        ----------
+        batch : HRUSample
+            Input batch containing time series, static features, and targets.
+
+        Returns:
+        -------
+        HRUSample
+            Normalized batch with transformed features.
+        """
+
+        batch.x = self.norm_stat_features(batch.x)
+        batch.x_routing = None if batch.x_routing is None else self.norm_stat_routing_features(batch.x_routing)
+        batch.d = self.norm_dyn_features(batch.d)
+        return batch
+
+    def normalize_targets(self, batch: HRUSample) -> HRUSample:
+        """Normalize the target data in the batch.
+
+        Parameters
+        ----------
+        batch : HRUSample
+            Input batch containing targets.
+
+        Returns:
+        -------
+        HRUSample
+            Batch with normalized targets.
+        """
+
+        batch.y = self.norm_targets(batch.y)
+        return batch

@@ -9,7 +9,7 @@ from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
 
 from project.data.downstream_aligner import DownstreamAligner
-from project.nn.models.base import TorchNormalizer
+from project.utils.torch.normalize import TorchNormalizer
 
 
 class TransportInstantSum(torch.nn.Module):

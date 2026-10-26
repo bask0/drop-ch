@@ -8,7 +8,7 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from project.nn.layers.lstm import LSTM
-from project.nn.models.base import TorchNormalizer
+from project.utils.torch.normalize import TorchNormalizer
 from project.utils.typing import HRUSample
 
 

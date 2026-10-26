@@ -16,9 +16,9 @@ from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
 
 from project.nn.models import EvaporationModel, RoutingModel, RunoffModel
-from project.nn.models.base import TorchNormalizer
 from project.nn.runoff_net import RunoffNet
 from project.utils.torch.loss import QLoss
+from project.utils.torch.normalize import TorchNormalizer
 from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
