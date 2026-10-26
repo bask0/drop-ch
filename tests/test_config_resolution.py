@@ -120,6 +120,16 @@ def test_config_chain_resolves_via_default_config_files(model: str, split: str |
     _assert_fully_resolved(cfg)
 
 
+@pytest.mark.parametrize(("model", "split"), MODEL_SPLITS)
+def test_fast_dev_run_writes_outside_real_runs(model: str, split: str | None):
+    """With fast_dev_run_config.yaml, test runs go to their own directory and cannot overwrite real results."""
+
+    cfg = _parse_via_config_files([*_config_files(model, split), "experiments/fast_dev_run_config.yaml"])
+    exp_dir = f"experiments/{model}" + (f"/{split}" if split else "")
+
+    assert cfg["tuning_engine"]["log_dir"] == f"{cfg['log_root']}/fast_dev_run/{exp_dir}"
+
+
 @pytest.mark.skipif(
     DATA_PATH is None or not DATA_PATH.exists(),
     reason=f"Requires the harmonized HRU dataset at {DATA_PATH} (edit data_root in experiments/paths.yaml).",
