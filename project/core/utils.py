@@ -111,7 +111,7 @@ class PredictionWriter(BasePredictionWriter):
         p = predictions[0]["data"]
         save_variables = list(p.keys())
         reference_variables = [v["obs_counterpart"] for v in p.values()]
-        ds.attrs["description"] = "StreamflowNet predictions"
+        ds.attrs["description"] = "DROP predictions"
         ds.attrs["obs_var"] = predictions[0]["obs_var"]
         ds.attrs["pred_var"] = predictions[0]["pred_var"]
 

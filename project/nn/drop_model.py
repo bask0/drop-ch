@@ -1,4 +1,4 @@
-"""Defines the RunofNet, a lightning model with training routing for runoff prediction."""
+"""Defines DROP, a Lightning model coupling runoff generation, evaporation and routing over a river network."""
 
 import os
 from pathlib import Path
@@ -22,10 +22,10 @@ from project.utils.torch.normalize import TorchNormalizer
 from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
-class StreamflowNet(pl.LightningModule):
-    """StreamflowNet model.
+class DROP(pl.LightningModule):
+    """DROP model.
 
-    StreamflowNet is a PyTorch Lightning module that integrates three neural network components for
+    DROP is a PyTorch Lightning module that integrates three neural network components for
     hydrological modeling: RunoffModel, EvaporationModel, and RoutingModel. It enables joint training and
     inference of runoff generation, evaporation, and streamflow routing over a graph of hydrological
     response units (HRUs).
@@ -99,7 +99,7 @@ class StreamflowNet(pl.LightningModule):
         norm_args_targets: dict | None = None,
         norm_args_stat_routing_features: dict | None = None,
     ) -> None:
-        """Initialize the StreamflowNet with specified sub-networks, hyperparameters, and configuration options.
+        """Initialize DROP with the specified sub-networks, hyperparameters, and configuration options.
 
         Args:
             num_stat_features (int | None, optional): Number of static input features for the runoff network.

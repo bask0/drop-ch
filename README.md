@@ -13,7 +13,7 @@
 
 DROP is a data-driven neural network architecture for modeling and routing streamflow in distributed hydrological systems.
 
-Designed to capture spatial and temporal dynamics of runoff generation and flow routing, DROP leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components. In the code, the model is implemented as `StreamflowNet`.
+Designed to capture spatial and temporal dynamics of runoff generation and flow routing, DROP leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components. In the code, the model is the class `DROP` in `project/nn/drop_model.py`.
 
 This repository contains the code accompanying the paper:
 
@@ -21,13 +21,22 @@ This repository contains the code accompanying the paper:
 
 This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
+## Reproducing the published results
+
+The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/streamflow-net/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README:
+
+```bash
+git checkout v0.2.0-revision
+pixi install
+```
+
 ## Project Structure
 
 ```bash
 .
 ├── project/                      # Installable package
 │   ├── core/                     # LightningCLI wrapper and Optuna-based tuning/xval engine
-│   ├── nn/                       # Model definitions (RunoffNet, StreamflowNet, layers, sub-models)
+│   ├── nn/                       # Model definitions (RunoffNet, DROP, layers, sub-models)
 │   ├── data/                     # LightningDataModule, dataset/graph construction and data splits
 │   ├── scripts/                  # Data download/preprocessing and post-processing scripts
 │   └── utils/                    # Paths, metrics, plotting, normalization and other shared utilities
@@ -36,12 +45,15 @@ This repository is shared to make the methods and results of the paper transpare
 │   ├── base_config.yaml          # Shared defaults
 │   ├── fast_dev_run_config.yaml  # Tiny, fast setting for checking the setup
 │   ├── prevah/config.yaml        # Runoff model pretrained on PREVAH simulations
+│   ├── prevah/run.sh             # SLURM submit script for this experiment
 │   └── {lumped,routed,instant}/
 │       ├── config.yaml           # Model-specific config
+│       ├── run.sh                # SLURM submit script for this experiment
 │       └── {easy,hard,random}/config.yaml  # Split-specific overrides
 ├── analysis/                     # Notebooks and scripts for the figures, and the figures themselves
 ├── slurm/                        # SLURM job scripts; cluster.example.sh is the template for your cluster.sh
 ├── tests/                        # Pytest suite
+├── .github/workflows/            # CI: ruff and tests on every push to main and every pull request
 ├── tune.py                       # Entry point: hyperparameter tuning
 ├── xval.py                       # Entry point: cross-validation
 ├── run_all.sh                    # Submits the full tune+xval job graph across experiments/splits
@@ -107,8 +119,8 @@ All scripts load it automatically. Run them with `bash` from the repository root
 | --- | --- | --- |
 | `prevah` | RunoffNet | Runoff model pretrained on PREVAH simulations, at HRU level. Required by `routed` and `instant`. |
 | `lumped` | RunoffNet | LSTM baseline on catchment-aggregated inputs. |
-| `routed` | StreamflowNet | Pretrained runoff model coupled with learned routing along the river network. |
-| `instant` | StreamflowNet | As `routed`, but with instantaneous routing (area-weighted summation), as an ablation. |
+| `routed` | DROP | Pretrained runoff model coupled with learned routing along the river network. |
+| `instant` | DROP | As `routed`, but with instantaneous routing (area-weighted summation), as an ablation. |
 
 `lumped`, `routed` and `instant` are run for two data splits: `hard` holds out a fixed set of catchments for testing, `random` splits at random (see `project/data/splitting.py`). Configs for an additional `easy` split, with a different set of held-out catchments, are included but not used in the paper.
 

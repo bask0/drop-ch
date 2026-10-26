@@ -1,6 +1,6 @@
-r"""Evaluate the pretrained RunoffNet as a component of StreamflowNet (before fine-tuning).
+r"""Evaluate the pretrained RunoffNet as a component of DROP (before fine-tuning).
 
-Instantiates StreamflowNet with:
+Instantiates DROP with:
   - pretrained RunoffNet weights (from the lumped experiment)
   - randomly initialised RoutingModel (untrained)
   - instant routing (area-weighted aggregation, no learned transport)
@@ -8,13 +8,13 @@ Instantiates StreamflowNet with:
 Instant routing is used deliberately so that the untrained RoutingModel weights do not
 contaminate the signal.  Any bias or error in the resulting Q comes from the RunoffNet.
 
-Driven by the routed experiment config YAML (--streamflow_config), which provides the
+Driven by the routed experiment config YAML (--drop_config), which provides the
 feature lists, data path, and lumped experiment dir.
 
 Usage
 -----
 python -m project.scripts.eval_pretrained_runoff_net \
-    --streamflow_config experiments/routed/random/config.yaml \
+    --drop_config experiments/routed/random/config.yaml \
     --output_path /tmp/pretrained_runoff_eval.nc
 """
 
@@ -30,7 +30,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from project.data.datamodule import GraphDataModule
-from project.nn.streamflow_net import StreamflowNet
+from project.nn.drop_model import DROP
 from project.utils.paths import load_paths_config
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     """Parse the command line arguments."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        "--streamflow_config",
+        "--drop_config",
         type=str,
         default="experiments/routed/random/config.yaml",
         help="Routed experiment config YAML.",
@@ -117,7 +117,7 @@ def data_kwargs_from_config(cfg: dict) -> dict:
 
 
 @torch.no_grad()
-def run_inference(model: StreamflowNet, dataloader, device: str):
+def run_inference(model: DROP, dataloader, device: str):
     """Run instant_forward and inference_forward on every batch and collect results.
 
     instant_forward : pretrained RunoffNet → area-weighted aggregation (no routing weights)
@@ -189,7 +189,7 @@ def print_summary(pred: np.ndarray, obs: np.ndarray, label: str) -> None:
 
 
 def main(
-    streamflow_config: str = "experiments/routed/random/config.yaml",
+    drop_config: str = "experiments/routed/random/config.yaml",
     output_path: str = "pretrained_runoff_eval.nc",
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     n_catchments: int = 1,  # use the N smallest outlets by upstream area
@@ -200,26 +200,26 @@ def main(
     """
     if sys.argv[0].endswith(("eval_pretrained_runoff_net.py", "__main__.py")) and len(sys.argv) > 1:
         a = parse_args()
-        streamflow_config = a.streamflow_config
+        drop_config = a.drop_config
         output_path = a.output_path
         device = a.device
 
-    sf_cfg = load_merged_config(streamflow_config)
+    drop_cfg = load_merged_config(drop_config)
 
     # ── 1. DataModule (routed, HRU-level) ────────────────────────────────────
-    print(f"Setting up GraphDataModule from: {streamflow_config}")
-    dm_kwargs = data_kwargs_from_config(sf_cfg)
+    print(f"Setting up GraphDataModule from: {drop_config}")
+    dm_kwargs = data_kwargs_from_config(drop_cfg)
     dm_kwargs.update(batch_size=1, num_workers=0, ds_subset={"time": slice("2000-01-01", "2001-12-31")})
     dm = GraphDataModule(**dm_kwargs)
 
-    # ── 2. StreamflowNet: pretrained RunoffNet + random RoutingModel ──────────
-    model_init_args = sf_cfg["model"]["init_args"].copy()
+    # ── 2. DROP: pretrained RunoffNet + random RoutingModel ──────────
+    model_init_args = drop_cfg["model"]["init_args"].copy()
 
     # For the output: use the norm_args_targets stored in the lumped checkpoint so that
     # scale_output=True correctly un-normalizes (LogXp → mm/day).
     # The routed DM has norm_targets=False → NoNormalizer, which would leave the LSTM
     # output in LogXp space and make convert_mmd_to_m3s operate on wrong values.
-    dummy = StreamflowNet.__new__(StreamflowNet)
+    dummy = DROP.__new__(DROP)
     ckpt_path = dummy._find_best_runoff_net_ckpt(model_init_args["runoff_net_exp_dir"])
     lumped_norm_args_targets = torch.load(ckpt_path, map_location="cpu")["hyper_parameters"]["norm_args_targets"]
     print(f"Using lumped norm_args_targets from checkpoint: {lumped_norm_args_targets}")
@@ -237,8 +237,8 @@ def main(
         use_instant_routing=True,  # bypass untrained routing weights
     )
 
-    print(f"Loading StreamflowNet (pretrained RunoffNet from: {model_init_args['runoff_net_exp_dir']})")
-    model = StreamflowNet(**model_init_args).to(device).eval()
+    print(f"Loading DROP (pretrained RunoffNet from: {model_init_args['runoff_net_exp_dir']})")
+    model = DROP(**model_init_args).to(device).eval()
 
     # ── 3. Restrict to the N smallest outlets that have observations ──────────
     outlets = dm.pred_catchments.values
@@ -292,11 +292,11 @@ def main(
         coords={"lead_time": np.arange(T)},
         attrs={
             "description": (
-                "StreamflowNet forward pass with pretrained RunoffNet. "
+                "DROP forward pass with pretrained RunoffNet. "
                 "Q_instant_m3s uses area-weighted aggregation (no routing weights); "
                 "Q_routed_m3s uses the randomly initialised RoutingModel."
             ),
-            "streamflow_config": str(streamflow_config),
+            "drop_config": str(drop_config),
             "runoff_net_exp_dir": str(model_init_args["runoff_net_exp_dir"]),
         },
     )
