@@ -43,10 +43,9 @@ class RunoffModel(torch.nn.Module):
             num_dynamic_in (int): Number of dynamic input features (e.g., precipitation, temperature).
             hidden_size (int): Number of hidden units in the LSTM.
             lstm_layers (int): Number of stacked LSTM layers.
-            variational_dropout (float), default=0.0
-                Variational dropout applied after the dynamic encoding layer.
-            enc_dropout (float), default=0.0
-                Dropout applied after the static encoding layer.
+            variational_dropout (float): Variational dropout applied after the dynamic encoding layer.
+                Defaults to 0.0.
+            enc_dropout (float): Dropout applied after the static encoding layer. Defaults to 0.0.
             max_q_chunk_size (int): Maximum number of nodes to process at once in chunked inference.
             use_precip_as_lake_runoff (bool): If True, replaces lake runoff predictions with precipitation.
             norm_args_dyn_features: Normalization arguments for dynamic features, defaults to None.
@@ -144,7 +143,7 @@ class RunoffModel(torch.nn.Module):
         else:
             num_nodes = len(subset)
 
-        num_iter = int(ceil(num_nodes / self.max_q_chunk_size))
+        num_iter = ceil(num_nodes / self.max_q_chunk_size)
 
         if num_iter == 1:
             return self(batch=batch, subset=subset, scale_output=scale_output)

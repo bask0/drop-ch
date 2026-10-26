@@ -178,6 +178,7 @@ class LSTM(torch.nn.Module):
             output_size (int): Output feature size per timestep.
             enc_dropout (float): Dropout rate used in both encoding modules.
             variational_dropout (float): Dropout rate used on dynamic encodings (variational).
+            **kwargs: Passed to `torch.nn.Module`.
         """
 
         super().__init__(**kwargs)

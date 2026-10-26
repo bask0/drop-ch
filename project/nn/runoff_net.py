@@ -139,7 +139,7 @@ class RunoffNet(LightningModuleWithSummary):
         self.log_dict(
             {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == "train" else False,
+            on_step=mode == "train",
             on_epoch=True,
             batch_size=batch.x.shape[0],  # type: ignore
         )

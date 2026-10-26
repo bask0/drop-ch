@@ -117,7 +117,7 @@ class PredictionWriter(BasePredictionWriter):
 
         # Initialize subset and prediction variables
         ds["subset"] = xr.full_like(ds.area, fill_value=0, dtype="int32")
-        for var, ref in zip(save_variables, reference_variables):
+        for var, ref in zip(save_variables, reference_variables, strict=True):
             if p[var].get("is_downstream_aligned", False):
                 if k_hops is None:
                     raise ValueError("k_hops is required for downstream aligned variables.")

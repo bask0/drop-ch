@@ -551,14 +551,14 @@ class StreamflowNet(pl.LightningModule):
             All tensor values are moved to CPU.
         """
 
-        Q, S, R, T, D, k, q, e, retention = self.inference_forward(batch=batch)
+        Q, S, R, T, D, k, q, e, _retention = self.inference_forward(batch=batch)
         _, Q_instant = self.instant_forward(batch=batch)
 
         k_hops = batch.k_hops[0].item()  # type: ignore
 
-        row, col, val = T.coo()
+        _, col, val = T.coo()
         T_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
-        row, col, val = D.coo()
+        _, col, val = D.coo()
         D_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
 
         data = {
@@ -727,7 +727,7 @@ class StreamflowNet(pl.LightningModule):
         self.log_dict(
             {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == "train" else False,
+            on_step=mode == "train",
             on_epoch=True,
             batch_size=batch.batch_size if mode == "train" else batch.has_obs.sum().item(),  # type: ignore
         )

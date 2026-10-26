@@ -19,7 +19,7 @@ from torch_sparse import SparseTensor
 
 from project.data.splitting import CatchmentSplitter, HRUSplitter
 from project.utils.torch.normalize import LogXp, NoNormalizer, Normalizer
-from project.utils.typing import HRUSample, assert_non_NaN
+from project.utils.typing import HRUSample, assert_not_none
 
 dask_config.set(scheduler="single-threaded")
 
@@ -261,7 +261,7 @@ class HRUData(InMemoryDataset):
 
         hru_idx = self.sample_hrus[idx]
 
-        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+        subset, _edge_index, _mapping, _edge_mask = k_hop_subgraph(
             node_idx=hru_idx,
             num_hops=1 if self.use_prevah else 1000,
             edge_index=self.edge_index,
@@ -271,8 +271,8 @@ class HRUData(InMemoryDataset):
         )
 
         # hrus x 1
-        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=subset))
-        upstream_area = assert_non_NaN(self.get_ds_feature("upstream_area", hru=hru_idx))
+        hru_area = assert_not_none(self.get_ds_feature("area", hru=subset))
+        upstream_area = assert_not_none(self.get_ds_feature("upstream_area", hru=hru_idx))
 
         # num static
         x = (self.get_stat_features(hru=subset) * hru_area[:, None]).sum(0) / upstream_area
@@ -281,13 +281,13 @@ class HRUData(InMemoryDataset):
         d = (self.get_dyn_features(hru=subset) * hru_area[:, None, None]).sum(0) / upstream_area
 
         # time x 1
-        Q_obs = assert_non_NaN(self.get_q_obs(hru=hru_idx))
+        Q_obs = assert_not_none(self.get_q_obs(hru=hru_idx))
 
         # 1
-        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
+        is_lake = assert_not_none(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
 
         # 1
-        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
+        water_freq = assert_not_none(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
 
         time_slice = self.get_time_slice(target=Q_obs)
 
@@ -312,7 +312,7 @@ class HRUData(InMemoryDataset):
         )
 
     def get_hru(self, idx: int) -> HRUSample:
-        """Retrieve and prepare relevant features and target variables for a single Hydrologic Response Unit (HRU) sample.
+        """Retrieve features and target variables for a single Hydrologic Response Unit (HRU) sample.
 
         Args:
             idx (int): Index of the HRU sample to retrieve.
@@ -333,23 +333,23 @@ class HRUData(InMemoryDataset):
         hru_idx = self.sample_hrus[idx]
 
         # Get static features for the HRU
-        x = assert_non_NaN(self.get_stat_features(hru=hru_idx))
+        x = assert_not_none(self.get_stat_features(hru=hru_idx))
         # Get dynamic features for the HRU
-        d = assert_non_NaN(self.get_dyn_features(hru=hru_idx))
+        d = assert_not_none(self.get_dyn_features(hru=hru_idx))
         # Get observed streamflow
-        Q_obs = assert_non_NaN(self.get_q_obs(hru=hru_idx))
+        Q_obs = assert_not_none(self.get_q_obs(hru=hru_idx))
         # Get emulated streamflow
-        Q_emulated = assert_non_NaN(assert_non_NaN(self.get_q_emulated(hru=hru_idx)))
+        Q_emulated = assert_not_none(assert_not_none(self.get_q_emulated(hru=hru_idx)))
         # Get PREVAH streamflow
-        q_prevah = assert_non_NaN(self.get_q_prevah(hru=hru_idx))
+        q_prevah = assert_not_none(self.get_q_prevah(hru=hru_idx))
         # Get precipitation and air temperature
-        prec = assert_non_NaN(self.get_ds_feature(["prec"], hru=hru_idx))
-        tair = assert_non_NaN(self.get_ds_feature(["tair"], hru=hru_idx))
+        prec = assert_not_none(self.get_ds_feature(["prec"], hru=hru_idx))
+        tair = assert_not_none(self.get_ds_feature(["tair"], hru=hru_idx))
 
         # Get HRU area and other attributes
-        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=hru_idx))
-        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
-        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
+        hru_area = assert_not_none(self.get_ds_feature("area", hru=hru_idx))
+        is_lake = assert_not_none(self.get_ds_feature("is_lake", hru=hru_idx)).type(x.dtype)
+        water_freq = assert_not_none(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
 
         # Determine valid time slice for this HRU
         time_slice = self.get_time_slice(target=Q_emulated)
@@ -398,7 +398,7 @@ class HRUData(InMemoryDataset):
         hru_idx = self.sample_hrus[idx]
 
         # Extract k-hop subgraph around the selected HRU
-        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+        subset, edge_index, mapping, _edge_mask = k_hop_subgraph(
             node_idx=hru_idx,
             num_hops=1 if self.use_prevah else 1000,
             edge_index=self.edge_index,
@@ -408,29 +408,29 @@ class HRUData(InMemoryDataset):
         )
 
         # Get static features for the subgraph nodes
-        x = assert_non_NaN(self.get_stat_features(hru=subset))
+        x = assert_not_none(self.get_stat_features(hru=subset))
         # Get static routing features for the subgraph nodes
-        x_routing = assert_non_NaN(self.get_stat_routing_features(hru=subset))
+        x_routing = assert_not_none(self.get_stat_routing_features(hru=subset))
         # Get dynamic features for the subgraph nodes
-        d = assert_non_NaN(self.get_dyn_features(hru=subset))
+        d = assert_not_none(self.get_dyn_features(hru=subset))
         # Get spatial coordinates for the subgraph nodes
-        xy_coords = assert_non_NaN(self.darray2tensor(self.get_coords(hru=subset)))
+        xy_coords = assert_not_none(self.darray2tensor(self.get_coords(hru=subset)))
         # Get observed streamflow for the subgraph nodes
-        Q_obs = assert_non_NaN(self.get_q_obs(hru=subset))
+        Q_obs = assert_not_none(self.get_q_obs(hru=subset))
         # Get emulated streamflow for the subgraph nodes
-        Q_emulated = assert_non_NaN(self.get_q_emulated(hru=subset))
+        Q_emulated = assert_not_none(self.get_q_emulated(hru=subset))
         # Get PREVAH streamflow for the subgraph nodes
-        q_prevah = assert_non_NaN(self.get_q_prevah(hru=subset))
+        q_prevah = assert_not_none(self.get_q_prevah(hru=subset))
         # Get precipitation for the subgraph nodes
-        prec = assert_non_NaN(self.get_ds_feature(["prec"], hru=subset))
+        prec = assert_not_none(self.get_ds_feature(["prec"], hru=subset))
         # Get air temperature for the subgraph nodes
-        tair = assert_non_NaN(self.get_ds_feature(["tair"], hru=subset))
+        tair = assert_not_none(self.get_ds_feature(["tair"], hru=subset))
 
-        hru_area = assert_non_NaN(self.get_ds_feature("area", hru=subset))
-        has_obs = assert_non_NaN(self.get_ds_feature("has_obs", hru=subset))
-        upstream_area = assert_non_NaN(self.get_ds_feature("upstream_area", hru=subset))
-        is_lake = assert_non_NaN(self.get_ds_feature("is_lake", hru=subset)).type(x.dtype)
-        water_freq = assert_non_NaN(self.get_ds_feature("water_freq", hru=subset)).type(x.dtype)
+        hru_area = assert_not_none(self.get_ds_feature("area", hru=subset))
+        has_obs = assert_not_none(self.get_ds_feature("has_obs", hru=subset))
+        upstream_area = assert_not_none(self.get_ds_feature("upstream_area", hru=subset))
+        is_lake = assert_not_none(self.get_ds_feature("is_lake", hru=subset)).type(x.dtype)
+        water_freq = assert_not_none(self.get_ds_feature("water_freq", hru=subset)).type(x.dtype)
 
         # Determine valid time slice for the target HRU
         time_slice = self.get_time_slice(target=Q_obs[mapping])
@@ -616,7 +616,7 @@ class HRUData(InMemoryDataset):
         return dist
 
     def get_cumul_dist(self, row: Tensor, col: Tensor, k: Tensor, subset: Tensor):
-        """Compute the cumulative Euclidean distance along paths for given row, col, and k tensors for a subset of nodes.
+        """Compute the cumulative Euclidean distance along paths for a subset of nodes.
 
         Args:
             row (Tensor): Tensor containing source node indices for each edge.
@@ -940,7 +940,7 @@ class HRUData(InMemoryDataset):
             list[int]: List of HRU indices that are upstream of the specified HRU.
         """
 
-        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+        subset, _edge_index, _mapping, _edge_mask = k_hop_subgraph(
             node_idx=hru_i,
             num_hops=1000,
             edge_index=self.edge_index,
@@ -998,9 +998,9 @@ class HRUData(InMemoryDataset):
         """
 
         features = ["x", "y"]
-        for vars in [self.stat_features, self.stat_routing_features, self.dyn_features]:
-            if vars is not None:
-                features.extend(vars)
+        for feature_group in [self.stat_features, self.stat_routing_features, self.dyn_features]:
+            if feature_group is not None:
+                features.extend(feature_group)
 
         return features
 
@@ -1071,7 +1071,7 @@ class GraphDataModule(pl.LightningDataModule):
         val_time_range: list[str] | None = None,
         skip_data_init: bool = False,
     ) -> None:
-        """Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
+        """Initialize the data module with graph datasets for training, validation, and testing.
 
         Args:
             data_path (str): Path to the dataset directory.
@@ -1089,9 +1089,15 @@ class GraphDataModule(pl.LightningDataModule):
             prediction_length (int, optional): Length of the prediction window. Default is 20.
             batch_size (int, optional): Batch size for data loading. Default is 32.
             num_workers (int, optional): Number of worker processes for data loading. Default is 4.
-            ds_subset (dict, optional)  Additional keyword arguments for xarray dataset subsettingusing `sel(...)`,
+            ds_subset (dict, optional): Additional keyword arguments for xarray dataset subsetting using `sel(...)`,
                 e.g., `{'time': slice(...)}`. Default is None, which means no subsetting is done.
             load_ds_to_memory (bool, optional): If True, loads the entire dataset into memory. Default is True.
+            num_folds (int, optional): Unused; accepted so all data modules share one configuration interface.
+            fold_idx (int, optional): Unused; accepted so all data modules share one configuration interface.
+            val_time_range (list[str] | None, optional): Start and end date (inclusive) to restrict the validation
+                set to, e.g. `['2000-01-01', '2000-12-31']`. Default is None, which uses the full time range.
+            skip_data_init (bool, optional): If True, only open the dataset lazily and skip loading it and computing
+                normalization statistics. Used to parse and instantiate configs without the data. Default is False.
         """
 
         super().__init__()
@@ -1230,7 +1236,7 @@ class GraphDataModule(pl.LightningDataModule):
             self.norm_args_targets = NoNormalizer.make_kwargs()
 
     def get_upstream_samples(self, hru_i: int, edge_index: Tensor) -> list[int]:
-        """Return a list of indices representing all upstream HRUs (Hydrologic Response Units) for a given HRU in a graph.
+        """Return the indices of all upstream Hydrologic Response Units (HRUs) of a given HRU in a graph.
 
         This method uses the k-hop subgraph algorithm to find all nodes that are connected to the specified HRU node,
         effectively identifying all upstream samples within the graph structure.
@@ -1243,7 +1249,7 @@ class GraphDataModule(pl.LightningDataModule):
             list[int]: A list of node indices corresponding to all upstream HRUs, including the specified HRU itself.
         """
 
-        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+        subset, edge_index, _mapping, _edge_mask = k_hop_subgraph(
             node_idx=hru_i,
             num_hops=1000,
             edge_index=edge_index,
@@ -1479,10 +1485,10 @@ class HRUDataModule(pl.LightningDataModule):
         load_ds_to_memory: bool = True,
         num_folds: int = 1,  # Keep for compatibility, not used in this class.
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
-        skip_data_init: bool = False,  # Keep for compatibility with tune.py.
-        k_hops: int = 10,  # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
-        val_time_range: list[str]
-        | None = None,  # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
+        skip_data_init: bool = False,
+        # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
+        k_hops: int = 10,
+        val_time_range: list[str] | None = None,
     ) -> None:
         """Initialize the HRUDataModule.
 
@@ -1499,6 +1505,13 @@ class HRUDataModule(pl.LightningDataModule):
             batch_size (int, optional): Batch size used in data loaders. Defaults to 32.
             num_workers (int, optional): Number of workers for data loading. Defaults to 4.
             load_ds_to_memory (bool, optional): If True, loads the entire dataset into memory. Defaults to True.
+            num_folds (int, optional): Unused; accepted so all data modules share one configuration interface.
+            fold_idx (int, optional): Unused; accepted so all data modules share one configuration interface.
+            skip_data_init (bool, optional): If True, skip loading the dataset and computing normalization
+                statistics. Used to parse and instantiate configs without the data. Defaults to False.
+            k_hops (int, optional): Unused; accepted so all data modules share one configuration interface.
+            val_time_range (list[str] | None, optional): Unused; accepted so all data modules share one
+                configuration interface.
 
         Notes:
             - HRU selection is done via slicing the dataset using xarray's `.sel()` based on the HRU IDs.
@@ -1678,6 +1691,7 @@ class HRUDataModule(pl.LightningDataModule):
 
     @property
     def num_stat_routing_features(self) -> int:
+        """Get the number of static routing features, always 0 as this data module has no routing."""
         return 0
 
     @property

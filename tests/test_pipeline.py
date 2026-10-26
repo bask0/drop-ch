@@ -12,7 +12,7 @@ from project.utils.paths import load_paths_config
 from project.utils.typing import HRUSample
 
 torch.manual_seed(0)
-np.random.seed(0)
+np.random.seed(0)  # noqa: NPY002 -- seeds the global RNG used by the code under test.
 
 _data_root = load_paths_config().get("data_root", "/path/to/data")
 DATA_PATH = f"{_data_root}/harmonized_hru_data.zarr"

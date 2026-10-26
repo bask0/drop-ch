@@ -362,8 +362,8 @@ class TuningEngine:
                         study_name=self.EXPERIMENT_NAME,
                         storage=self._get_storage(db_path=self.tune_db),
                     )
-                except Exception:
-                    raise ValueError("No study was created or loaded. Cannot proceed with finalizing running.")
+                except Exception as err:
+                    raise ValueError("No study was created or loaded. Cannot proceed with finalizing running.") from err
 
             if len(study.trials) > n_trials_before:
                 logger.info(f"Creating summary plots in '{self.tune_dir}'...")
@@ -508,16 +508,14 @@ class TuningEngine:
         if not is_tune:
             config_files = [self.best_config_path]
 
-        args = (
-            [
-                "--trainer.logger.class_path=lightning.pytorch.loggers.TensorBoardLogger",
-                f"--trainer.logger.save_dir={self.tune_dir if is_tune else self.xval_dir}",
-                f"--trainer.logger.version={version}",
-                "--trainer.logger.name=",
-            ]
-            + cli_args
-            + sample_args
-        )
+        args = [
+            "--trainer.logger.class_path=lightning.pytorch.loggers.TensorBoardLogger",
+            f"--trainer.logger.save_dir={self.tune_dir if is_tune else self.xval_dir}",
+            f"--trainer.logger.version={version}",
+            "--trainer.logger.name=",
+            *cli_args,
+            *sample_args,
+        ]
 
         if is_tune:
             trainer_defaults = {
@@ -546,8 +544,8 @@ class TuningEngine:
             # Save useful info in trial attributes
             try:
                 best_checkpoint = cli.trainer.checkpoint_callback.best_model_path  # type: ignore
-            except AttributeError:
-                raise AttributeError("No checkpoint callback found; cannot retrieve best model path.")
+            except AttributeError as err:
+                raise AttributeError("No checkpoint callback found; cannot retrieve best model path.") from err
 
             # Retrieve the best validation loss from early stopping or logs
             if hasattr(cli.trainer, "early_stopping_callback") and cli.trainer.early_stopping_callback is not None:
@@ -565,8 +563,8 @@ class TuningEngine:
 
         try:
             log_dir = cli.trainer.logger.log_dir  # type: ignore
-        except AttributeError:
-            raise AttributeError("No logger found; cannot retrieve log directory.")
+        except AttributeError as err:
+            raise AttributeError("No logger found; cannot retrieve log directory.") from err
 
         trial.set_user_attr("best_checkpoint", str(best_checkpoint))
         trial.set_user_attr("log_dir", log_dir)
@@ -709,13 +707,13 @@ class TuningEngine:
 
         it = iter(sys.argv[1:])  # Skip script name
         for arg in it:
-            if arg.startswith("--config=") or arg.startswith("-c="):
+            if arg.startswith(("--config=", "-c=")):
                 config_files.append(arg.split("=", 1)[1])
             elif arg in ("--config", "-c"):
                 try:
                     config_files.append(next(it))
                 except StopIteration:
-                    raise ValueError("Expected a file path after '--config' or '-c'")
+                    raise ValueError("Expected a file path after '--config' or '-c'") from None
             else:
                 args.append(arg)
 
@@ -766,11 +764,11 @@ class TuningEngine:
         except optuna.exceptions.DuplicatedStudyError:
             logger.info("Optuna study already exists — skipping creation.")
 
-    def _create_dirs_if_needed(self, dir: PathLike | str, remove: bool = False) -> None:
+    def _create_dirs_if_needed(self, path: PathLike | str, remove: bool = False) -> None:
         """Create the specified directory if it does not exist, with optional removal of existing contents.
 
         Args:
-            dir (PathLike | str): The target directory path to create.
+            path (PathLike | str): The target directory path to create.
             remove (bool, optional): If True, removes the directory and its contents before creation. Defaults to False.
 
         Raises:
@@ -781,34 +779,34 @@ class TuningEngine:
             - Parent directories will be created as needed.
         """
 
-        dir = Path(dir)
+        path = Path(path)
         if remove:
-            self._remove_dir(dir)
-        dir.mkdir(parents=True, exist_ok=True)
+            self._remove_dir(path)
+        path.mkdir(parents=True, exist_ok=True)
 
-    def _remove_dir(self, dir: Path) -> None:
+    def _remove_dir(self, path: Path) -> None:
         """Safely remove a directory and its contents, handling busy files gracefully.
 
         Args:
-            dir (Path): The directory to remove.
+            path (Path): The directory to remove.
         """
 
-        if not dir.exists():
+        if not path.exists():
             return
 
         if not self.overwrite:
             raise FileExistsError(
-                f"Directory already exists: {dir}. Use overwrite=True or --tuning_engine.overwrite=True "
+                f"Directory already exists: {path}. Use overwrite=True or --tuning_engine.overwrite=True "
                 "from the CLI to remove it."
             )
 
         # First attempt: ignore errors (for files that may be open)
         for _ in range(3):
-            shutil.rmtree(dir, ignore_errors=True)
+            shutil.rmtree(path, ignore_errors=True)
             time.sleep(2)  # give NFS / open files a chance to release
 
-        if dir.exists():
-            raise OSError(f"Cannot remove directory: {dir}. It may contain busy files or directories.")
+        if path.exists():
+            raise OSError(f"Cannot remove directory: {path}. It may contain busy files or directories.")
 
     @staticmethod
     def _create_symlink(source: Path | str, target: Path | str, force: bool = True) -> None:
@@ -875,7 +873,8 @@ class TuningEngine:
         os.makedirs(log_dir, exist_ok=True)
 
         log_file = log_dir / f"run_{os.getpid()}.log"
-        log_fh = open(log_file, "a")
+        # Kept open for the lifetime of the process, as stdout/stderr write to it.
+        log_fh = open(log_file, "a")  # noqa: SIM115
 
         class Tee:
             """Write to both console and file."""

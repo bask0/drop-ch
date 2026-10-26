@@ -141,3 +141,5 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D100", "D103", "D104"]
+# Loss modules keep torch.nn's `forward(input, target)` signature.
+"project/utils/torch/loss.py" = ["A002"]

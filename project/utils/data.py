@@ -143,7 +143,7 @@ def load_hillshade(
     """Load or compute hillshade from MERIT DEM.
 
     Args:
-        hillshade_path: Path to Zarr file to load/store hillshade.
+        hillshade_dir: Directory of the Zarr file to load/store hillshade.
         hrus: GeoDataFrame with HRU polygons.
         ds: Dataset with HRU IDs and lake mask.
         dem_path: Path to DEM.

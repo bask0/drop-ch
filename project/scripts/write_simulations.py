@@ -1,6 +1,7 @@
 """Write simulations to compressed netCDF4 file.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
+directories before running.
 """
 
 import os

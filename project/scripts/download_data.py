@@ -1,6 +1,7 @@
 """Script to download and process MERIT and SoilGrids data.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
+directories before running.
 """
 
 import logging

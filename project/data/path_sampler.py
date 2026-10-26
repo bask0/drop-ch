@@ -94,7 +94,7 @@ class PathSampler:
             return torch.arange(num_nodes, device=device)
 
         for b in range(batch.batch_size):
-            sample_nodes = torch.tensor([i for i in torch.argwhere(batch_id == b)])
+            sample_nodes = torch.tensor(list(torch.argwhere(batch_id == b)))
             random_indices = torch.unique(torch.randint(high=len(sample_nodes), size=(self.num_samples_per_graph,)))
             random_nodes.append(sample_nodes[random_indices])
 

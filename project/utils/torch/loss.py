@@ -322,7 +322,7 @@ class RegressionLoss(nn.Module):
         return loss
 
     def __repr__(self) -> str:
-        """Return a string representation of the RegressionLoss instance with the criterion and sqrt_transform attributes.
+        """Return a string representation of the RegressionLoss showing criterion and sqrt_transform.
 
         Returns:
             str: A formatted string showing the values of criterion and sqrt_transform.

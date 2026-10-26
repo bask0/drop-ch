@@ -23,7 +23,8 @@ class TransformLayer(torch.nn.Module):
             torch.Size([2, 12])
 
         Args:
-            transform_fun (Callable): thetransform function.
+            transform_fun (Callable): The transform function.
+            name (str): Name shown in the string representation. Defaults to "Transform()".
         """
         super().__init__()
 

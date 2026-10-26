@@ -10,7 +10,7 @@ from torch import Tensor
 AnyNotNone = TypeVar("AnyNotNone")
 
 
-def assert_non_NaN(x: AnyNotNone | None) -> AnyNotNone:
+def assert_not_none(x: AnyNotNone | None) -> AnyNotNone:
     """Assert that the input x is not None.
 
     Parameters:

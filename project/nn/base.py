@@ -69,9 +69,8 @@ class LightningModuleWithSummary(pl.LightningModule):
         experiment = logger.experiment  # type: ignore
 
         for name, param in self.named_parameters():
-            if param.requires_grad:
-                if param.grad is not None:
-                    experiment.add_histogram(name + ".grad", param.grad, self.global_step)
+            if param.requires_grad and param.grad is not None:
+                experiment.add_histogram(name + ".grad", param.grad, self.global_step)
 
     def on_after_optimizer_step(self, *args, **kwargs):
         """Log model parameters after optimizer step."""

@@ -45,7 +45,7 @@ def get_activation(activation: ActivationLiteral | None) -> torch.nn.Module:
 
     try:
         return activations[activation_str]()
-    except KeyError:
+    except KeyError as err:
         raise ValueError(
             f"Unknown activation '{activation}'. Available options: " + ", ".join(activations.keys() | alias_map.keys())
-        )
+        ) from err

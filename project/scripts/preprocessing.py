@@ -1,6 +1,9 @@
-"""This module contains functions for preprocessing geospatial data, including zonal statistics, reprojecting datasets, reading RDS files, and extracting features from raster data.
+"""Preprocess the raw geospatial data into the harmonized HRU dataset.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data directories before running.
+Includes zonal statistics, reprojection, reading RDS files, and extracting features from raster data.
+
+NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
+directories before running.
 """
 
 import gzip
@@ -27,7 +30,7 @@ from rasterio import enums
 from rasterio.enums import MergeAlg
 from scipy.stats import circmean
 from shapely import force_2d
-from sklearn.neural_network import MLPRegressor as MPL
+from sklearn.neural_network import MLPRegressor
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
@@ -35,6 +38,7 @@ warnings.filterwarnings("ignore", module="pyproj", category=UserWarning)
 
 
 def circular_mean(directions):
+    """Compute the circular mean of directions given in degrees."""
     angles = np.deg2rad(directions)
     cmean = circmean(angles)
     return np.rad2deg(cmean)
@@ -50,6 +54,11 @@ def zonal_aggregate(
     fill_nn=True,  # Do fill with nearest neighbor for very small catchments.
     **kwargs,
 ) -> gpd.GeoDataFrame:
+    """Aggregate raster `values` per zone (catchment) and join the result to a GeoDataFrame.
+
+    `stats_func` is either a list with one xarray-spatial statistic name or a dict with one custom function.
+    Zones without valid values are optionally filled from their nearest neighbor (`fill_nn`).
+    """
 
     if stats_func:
         assert len(stats_func) == 1, "argument `stats_func` cannot contain more than one function."
@@ -91,7 +100,7 @@ def zonal_aggregate(
             if isinstance(stats_func, list):
                 res = getattr(values_subset, stats_func[0])()
             elif isinstance(stats_func, dict):
-                res = list(stats_func.values())[0](values_subset)
+                res = next(iter(stats_func.values()))(values_subset)
             else:
                 raise NotImplementedError("`stats_func` must be a list or a dictionary.")
 
@@ -101,6 +110,7 @@ def zonal_aggregate(
 
 
 def reproject_like(x: xr.Dataset, ref: xr.Dataset | None, resampling=enums.Resampling.bilinear, **kwargs):
+    """Reproject `x` onto the grid of `ref`, renaming lat/lon to y/x first."""
     rename = {}
     if "lat" in x.coords:
         rename.update(lat="y")
@@ -126,6 +136,7 @@ def reproject_like(x: xr.Dataset, ref: xr.Dataset | None, resampling=enums.Resam
 
 
 def read_rds(path: str | os.PathLike) -> pd.DataFrame:
+    """Read an R RDS file into a DataFrame."""
     return pyreadr.read_r(path)[None]
 
 
@@ -134,7 +145,7 @@ TIME_END = "2023-12-31"  # '1992-12-31'
 NUM_PAR = 60
 
 cm = gpd.read_file("/path/to/raw_data/machflow_routing/data/raw/catchments_final").set_index("EZGNR")
-cm_geom = [(shapes, uid) for shapes, uid in zip(cm.geometry, cm.index)]
+cm_geom = [(shapes, uid) for shapes, uid in zip(cm.geometry, cm.index, strict=True)]
 stations = gpd.read_file(
     "/path/to/raw_data/machflow_routing/data/processed/hydro_ch/Inventory_discharge_hydroCH_manually_cleaned.gpkg"
 )
@@ -144,6 +155,7 @@ dams = gpd.read_file("/path/to/raw_data/machflow_routing/data/processed/manageme
 
 
 def load_and_project_era5land(year, product, n_time_sample=-1, time_stamp=None):
+    """Load MeteoSwiss temperature and the matching ERA5-Land data for a year on a common grid."""
 
     product_map = {
         "TabsD": "tmean1d_regrid",
@@ -177,7 +189,7 @@ def load_and_project_era5land(year, product, n_time_sample=-1, time_stamp=None):
 
     if n_time_sample > 0:
         n_time = len(tmean.time)
-        time_samples = np.random.choice(n_time, size=n_time_sample)
+        time_samples = np.random.choice(n_time, size=n_time_sample)  # noqa: NPY002 -- keep legacy RNG for reproducibility.
 
         tmean_ms = tmean_ms.isel(time=time_samples)
         tmean = tmean.isel(time=time_samples)
@@ -196,6 +208,7 @@ def load_and_project_era5land(year, product, n_time_sample=-1, time_stamp=None):
 
 
 def enrich_dataset(ds: xr.Dataset, norm_means: xr.Dataset | None = None, norm_stds: xr.Dataset | None = None):
+    """Add coordinate, seasonal and elevation predictors and standardize all variables."""
     ds["x_coords"] = ds["x"].expand_dims(y=ds["y"]).expand_dims(time=ds.time)
     ds["y_coords"] = ds["y"].expand_dims(x=ds["x"]).expand_dims(time=ds.time)
     ds["time_cos"] = np.cos(ds.time.dt.dayofyear / 366 * 2 * np.pi).expand_dims(y=ds.y, x=ds.x, axis=(1, 2))
@@ -214,13 +227,14 @@ def enrich_dataset(ds: xr.Dataset, norm_means: xr.Dataset | None = None, norm_st
 
 
 def fit(ds: xr.Dataset):
+    """Fit an MLP regressor predicting `ms` from the other variables."""
     ds_ = ds.stack(d=("x", "y", "time")).reset_index("d").compute()
     ds_ = ds_.where(ds_.ms.notnull(), drop=True).compute()
 
     X = ds_.drop_vars("ms").to_array().values.T
     y = ds_["ms"].values
 
-    mlp = MPL(
+    mlp = MLPRegressor(
         hidden_layer_sizes=(24, 24, 24),
         learning_rate_init=0.05,
         early_stopping=True,
@@ -234,7 +248,8 @@ def fit(ds: xr.Dataset):
     return fit
 
 
-def predict(ds: xr.Dataset, fit: MPL):
+def predict(ds: xr.Dataset, fit: MLPRegressor):
+    """Predict `ms` with a fitted regressor, keeping NaN where any input is missing."""
     ds_ = ds.stack(d=("x", "y", "time")).compute()
 
     X = ds_.drop_vars("ms").to_array()
@@ -331,6 +346,7 @@ if True:
 
 
 def raster_to_hrus_temp(time):
+    """Downscale air temperature for one day and aggregate it to the catchments."""
 
     year = time[:4]
 
@@ -399,6 +415,7 @@ if True:
 
 
 def raster_to_hrus_prec(time):
+    """Aggregate MeteoSwiss precipitation (RhiresD) for one day to the catchments."""
     year = time[:4]
     prec = (
         xr.open_dataset(
@@ -437,7 +454,7 @@ if True:
 
 
 def read_data_gz(file_path: pathlib.Path) -> xr.DataArray:
-    """Read gz binary PREVAH data from a file"""
+    """Read gz binary PREVAH data from a file."""
     with gzip.open(file_path, "rb") as file:
         size = 4
         count = 6
@@ -465,6 +482,7 @@ def read_data_gz(file_path: pathlib.Path) -> xr.DataArray:
 
 
 def raster_to_hrus_prevah(time, return_prevah_grid=False):
+    """Aggregate PREVAH runoff for one day to the catchments, or return the PREVAH grid itself."""
 
     time_flat = time.replace("-", "")
 
@@ -473,16 +491,15 @@ def raster_to_hrus_prevah(time, return_prevah_grid=False):
     if not tar_path.exists():
         return None
 
-    tar = tarfile.open(tar_path)
+    with tarfile.open(tar_path) as tar:
+        member_name = [member for member in tar.getnames() if member.endswith(".RGS.gz")]
+        if (n := len(member_name)) != 1:
+            raise FileNotFoundError(f"found `{n}` files with ending '.RGS.gz', expected `1`.")
 
-    member_name = [member for member in tar.getnames() if member.endswith(".RGS.gz")]
-    if (n := len(member_name)) != 1:
-        raise FileNotFoundError(f"found `{n}` files with ending '.RGS.gz', expected `1`.")
+        subfile = tar.getmember(member_name[0])
+        gz = tar.extractfile(subfile)
 
-    subfile = tar.getmember(member_name[0])
-    gz = tar.extractfile(subfile)
-
-    prevah = read_data_gz(gz)
+        prevah = read_data_gz(gz)
     prevah = prevah.rio.write_crs("EPSG:21781")
 
     prevah = reproject_like(prevah, ref=ref_hr, resampling=enums.Resampling.nearest, nodata=np.nan)
@@ -533,6 +550,7 @@ if True:
     prevah_sample = prevah_sample.where(prevah_sample.notnull(), -9999)
 
     def get_missing_fraction(x):
+        """Return the fraction of PREVAH no-data values (-9999)."""
         x = np.asarray(x)
         return (x == -9999).sum() / len(x)
 
@@ -543,7 +561,7 @@ if True:
 
     cm_prevah = frac_miss.loc[frac_miss.frac_miss <= 0.5]
 
-    cm_prevah_geom = [(shapes, uid) for shapes, uid in zip(cm_prevah.geometry, cm_prevah.index)]
+    cm_prevah_geom = [(shapes, uid) for shapes, uid in zip(cm_prevah.geometry, cm_prevah.index, strict=True)]
 
     # Add column to cm for later identification of out-of-PREVAH catchments.
     cm["has_prevah"] = frac_miss.frac_miss <= 0.5
@@ -580,6 +598,7 @@ if True:
 
 
 def find_upstream(df, target_id):
+    """Return the IDs of `target_id` and all catchments upstream of it."""
     upstream = [target_id]
 
     def recurse(current_id):
@@ -837,7 +856,7 @@ rasterized = rfeatures.rasterize(
     dtype=np.int32,
 )
 
-zones = xr.full_like(soilgrids[list(soilgrids.data_vars)[0]], fill_value=-1, dtype="int")
+zones = xr.full_like(soilgrids[next(iter(soilgrids.data_vars))], fill_value=-1, dtype="int")
 zones.values[:] = rasterized
 
 
@@ -867,7 +886,7 @@ corine_class_map = {
     "water": (7, [40, 41]),
 }
 
-for key, values in corine_class_map.items():
+for values in corine_class_map.values():
     corine_reclass = corine_reclass.where(~corine.isin(values[1]), values[0])
 
 corine_reclass = corine_reclass.rio.reproject(cm.crs, resolution=(50, 50), resampling=enums.Resampling.nearest)
@@ -888,13 +907,18 @@ zones.values[:] = rasterized
 
 
 def frequency(x, value: int = 1):
+    """Return the fraction of finite values in `x` equal to `value`."""
     x = np.asarray(x)
     return (x == value).sum() / np.isfinite(x).sum()
 
 
 for key, values in corine_class_map.items():
     cm = zonal_aggregate(
-        zones, corine_reclass, join_df=cm, stats_func={"freq": lambda x: frequency(x, value=values[0])}, prefix=key
+        zones,
+        corine_reclass,
+        join_df=cm,
+        stats_func={"freq": lambda x, value=values[0]: frequency(x, value=value)},
+        prefix=key,
     )
 
 print("Cleaning polygon data.")
@@ -936,7 +960,7 @@ static_columns = cm.columns[start_column:]
 cm["is_lake"] = cm.SEE == "See_stehendesGW"
 
 
-for column in list(static_columns) + ["area", "downstream", "has_prevah", "is_lake"]:
+for column in [*static_columns, "area", "downstream", "has_prevah", "is_lake"]:
     if column == "downstream":
         dummy_da = xr.DataArray(0, dims=["ezgnr"], coords=[cm.index.values]).astype("int32")
     else:

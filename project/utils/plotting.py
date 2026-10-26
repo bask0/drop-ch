@@ -174,7 +174,7 @@ def plot_optuna_summary(study_path: str | PathLike, study_name: str | None = Non
 def _get_cdf(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, float]:
     da = da.load()
     da = da.where(da.notnull(), drop=True)
-    bins = sorted(da.values) + [np.inf]
+    bins = [*sorted(da.values), np.inf]
     count, bins = np.histogram(da, bins=bins)
     bins = bins[:-1]
     pdf = count / sum(count)
