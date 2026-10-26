@@ -1,11 +1,9 @@
 """Defines DROP, a Lightning model coupling runoff generation, evaporation and routing over a river network."""
 
-import os
 from pathlib import Path
 from typing import Literal, cast
 
 import lightning.pytorch as pl
-import optuna
 import torch
 from lightning.pytorch.utilities import grad_norm
 from torch import Tensor
@@ -17,6 +15,7 @@ from torch_sparse import SparseTensor
 
 from project.nn.models import EvaporationModel, RoutingModel, RunoffModel
 from project.nn.runoff_net import RunoffNet
+from project.utils.checkpoints import find_best_checkpoint
 from project.utils.torch.loss import QLoss
 from project.utils.torch.normalize import TorchNormalizer
 from project.utils.unit_conversion import convert_mmd_to_m3s
@@ -794,60 +793,6 @@ class DROP(pl.LightningModule):
         super().on_test_epoch_end()
         self.log_epoch_median_loss("test")
 
-    def _find_best_runoff_net_ckpt(self, experiment_dir: str | Path) -> Path:
-        """Find the best RunoffNet model checkpoint from the specified experiment directory.
-
-        Args:
-            experiment_dir (str | Path): Path to the RunoffNet experiment directory containing
-                the 'tune/optuna.db' file.
-
-        Returns:
-            Path: Path to the best RunoffNet model checkpoint.
-
-        Raises:
-            FileNotFoundError: If no 'tune/optuna.db' file is found in the specified directory.
-            ValueError: If multiple 'tune/optuna.db' files are found in the specified directory.
-
-        """
-
-        experiment_dir = Path(experiment_dir)
-
-        hits = []
-        for root, _, files in os.walk(experiment_dir, followlinks=True):
-            if "optuna.db" in files:
-                path = Path(root) / "optuna.db"
-                if path.parent.name == "tune":  # only keep those in tune/
-                    hits.append(path)
-
-        if len(hits) == 0:
-            raise FileNotFoundError(f"No '**/tune/optuna.db' files found in '{experiment_dir}'.")
-        if len(hits) > 1:
-            raise ValueError(
-                f"Multiple '**/tune/optuna.db' files found in '{experiment_dir}', please specify "
-                f"a directory with only one such file. Hits were:"
-            )
-
-        # The optuna.db file should be unique in the tune subdirectory, e.g., /path/tune/optuna.db
-        optuna_db_path = Path(hits[0])
-
-        # Load the study
-        study = optuna.load_study(study_name=None, storage=f"sqlite:///{optuna_db_path}")
-
-        # Get the tuning dir as saved in the study, e.g., /old/path/tune
-        tune_dir = Path(study.user_attrs["tune_dir"])
-
-        # Get the best checkpoint path as saved in the study, e.g., /old/path/tune/trial_006/checkpoints/best.ckpt
-        best_ckpt_old = Path(study.best_trial.user_attrs["best_checkpoint"])
-
-        # Get the relative path of the best checkpoint to the tuning dir, e.g., trial_006/checkpoints/best.ckpt
-        best_ckpt_rel = best_ckpt_old.relative_to(tune_dir)
-
-        # Construct the new best checkpoint path by replacing the old tuning dir with the parent dir of
-        # the optuna.db file (/path/tune/)
-        best_ckpt = optuna_db_path.parent / best_ckpt_rel
-
-        return best_ckpt
-
     def _get_best_runoff_net(self, experiment_dir: str | Path, use_pretrained: bool, **overwrite_kwargs) -> RunoffModel:
         """Get the best RunoffNet model checkpoint from the specified experiment directory.
 
@@ -862,7 +807,7 @@ class DROP(pl.LightningModule):
 
         """
 
-        best_runoff_net_ckpt = self._find_best_runoff_net_ckpt(experiment_dir=experiment_dir)
+        best_runoff_net_ckpt = find_best_checkpoint(experiment_dir)
 
         if use_pretrained:
             runoff_net = RunoffNet.load_from_checkpoint(best_runoff_net_ckpt, map_location="cpu").runoff_lstm

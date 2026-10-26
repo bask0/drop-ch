@@ -1,12 +1,15 @@
 trainer:
   max_epochs: 1
 
-tuning_engine:
-  n_trials: 2
-
 data:
   init_args:
     k_hops: 2
     temporal_context_length: 10
     prediction_length: 2
     val_time_range: ["2000-01-01", "2000-12-31"]
+
+# Write test runs to a separate directory, so that `--tuning_engine.overwrite=True` (as in
+# slurm/example_minimal.sh) can never delete the results of real runs in `log_root`.
+tuning_engine:
+  n_trials: 2
+  log_dir: ${log_root}/fast_dev_run/${tuning_engine.exp_dir}

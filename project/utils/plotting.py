@@ -147,9 +147,9 @@ def _optuna_plots(study: optuna.Study, out_dir: str | PathLike, is_xval: bool = 
 
             fig.write_image(os.path.join(out_dir, optuna_plot + ".png"), scale=2, width=1600, height=1200)
         except RuntimeError as e:
-            print("The following RuntimeError was raised (and ignored) for plot '{optuna_plot}':\n", e)
+            print(f"The following RuntimeError was raised (and ignored) for plot '{optuna_plot}':\n", e)
         except ValueError as e:
-            print("The following ValueError: was raised (and ignored) for plot '{optuna_plot}':\n", e)
+            print(f"The following ValueError was raised (and ignored) for plot '{optuna_plot}':\n", e)
 
 
 def plot_optuna_summary(study_path: str | PathLike, study_name: str | None = None, is_xval: bool = False) -> None:

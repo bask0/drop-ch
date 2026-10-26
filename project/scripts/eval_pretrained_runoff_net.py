@@ -31,6 +31,7 @@ from tqdm import tqdm
 
 from project.data.datamodule import GraphDataModule
 from project.nn.drop_model import DROP
+from project.utils.checkpoints import find_best_checkpoint
 from project.utils.paths import load_paths_config
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -219,8 +220,7 @@ def main(
     # scale_output=True correctly un-normalizes (LogXp → mm/day).
     # The routed DM has norm_targets=False → NoNormalizer, which would leave the LSTM
     # output in LogXp space and make convert_mmd_to_m3s operate on wrong values.
-    dummy = DROP.__new__(DROP)
-    ckpt_path = dummy._find_best_runoff_net_ckpt(model_init_args["runoff_net_exp_dir"])
+    ckpt_path = find_best_checkpoint(model_init_args["runoff_net_exp_dir"])
     lumped_norm_args_targets = torch.load(ckpt_path, map_location="cpu")["hyper_parameters"]["norm_args_targets"]
     print(f"Using lumped norm_args_targets from checkpoint: {lumped_norm_args_targets}")
 
