@@ -18,14 +18,15 @@ class EncodingModule(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            num_in: int,
-            num_enc: int,
-            num_layers: int,
-            dropout: float,
-            hidden_size_factor: int = 1,
-            activation: torch.nn.Module | None = None,
-            activation_last: torch.nn.Module | None = None) -> None:
+        self,
+        num_in: int,
+        num_enc: int,
+        num_layers: int,
+        dropout: float,
+        hidden_size_factor: int = 1,
+        activation: torch.nn.Module | None = None,
+        activation_last: torch.nn.Module | None = None,
+    ) -> None:
         """Initialize EncodingModule.
 
         Args:
@@ -129,7 +130,7 @@ class VariationalDropout(torch.nn.Module):
             torch.Tensor: Output tensor with the same shape as input, with dropout applied.
         """
 
-        if not self.training or self.dropout <= 0.:
+        if not self.training or self.dropout <= 0.0:
             return x
 
         # Drop same mask across entire sequence
@@ -158,15 +159,16 @@ class LSTM(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            num_static_in: int,
-            num_dynamic_in: int,
-            hidden_size: int = 32,
-            lstm_layers: int = 1,
-            output_size: int = 1,
-            enc_dropout: float = 0.0,
-            variational_dropout: float = 0.0,
-            **kwargs) -> None:
+        self,
+        num_static_in: int,
+        num_dynamic_in: int,
+        hidden_size: int = 32,
+        lstm_layers: int = 1,
+        output_size: int = 1,
+        enc_dropout: float = 0.0,
+        variational_dropout: float = 0.0,
+        **kwargs,
+    ) -> None:
         """
         Initialize the LSTM model.
 
@@ -182,7 +184,7 @@ class LSTM(torch.nn.Module):
 
         super().__init__(**kwargs)
 
-        self.model_type = 'LSTM'
+        self.model_type = "LSTM"
 
         # Static input encoding: encodes static features into hidden representation
         self.static_encoding = EncodingModule(
@@ -191,12 +193,10 @@ class LSTM(torch.nn.Module):
             num_layers=2,
             dropout=0,  # Done separately.
             activation=torch.nn.ReLU(),
-            activation_last=torch.nn.Sigmoid()
+            activation_last=torch.nn.Sigmoid(),
         )
 
-        self.static_dropout = torch.nn.Dropout(
-            p=enc_dropout
-        )
+        self.static_dropout = torch.nn.Dropout(p=enc_dropout)
 
         # Dynamic input encoding: encodes dynamic inputs for each timestep
         self.dynamic_encoding = EncodingModule(
@@ -205,13 +205,10 @@ class LSTM(torch.nn.Module):
             num_layers=2,
             dropout=0,  # Done separately.
             activation=torch.nn.ReLU(),
-            activation_last=torch.nn.Tanh()
+            activation_last=torch.nn.Tanh(),
         )
 
-        self.variational_dropout = VariationalDropout(
-            dropout=variational_dropout,
-            batch_first=True
-        )
+        self.variational_dropout = VariationalDropout(dropout=variational_dropout, batch_first=True)
 
         # Temporal modeling with LSTM
         self.lstm = torch.nn.LSTM(
@@ -222,10 +219,7 @@ class LSTM(torch.nn.Module):
         )
 
         # Output projection layer
-        self.out_layer = torch.nn.Linear(
-            in_features=hidden_size,
-            out_features=output_size
-        )
+        self.out_layer = torch.nn.Linear(in_features=hidden_size, out_features=output_size)
 
         # Optional activation function applied to outputs
         self.output_activation = torch.nn.Identity()

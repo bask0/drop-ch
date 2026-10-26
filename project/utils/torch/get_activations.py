@@ -3,15 +3,10 @@
 from typing import Literal, cast
 import torch
 
-ActivationLiteral = Literal[
-    'relu', 'leakyrelu', 'selu', 'sigmoid', 'softplus',
-    'tanh', 'identity', 'linear', 'none'
-]
+ActivationLiteral = Literal["relu", "leakyrelu", "selu", "sigmoid", "softplus", "tanh", "identity", "linear", "none"]
 
 
-def get_activation(
-        activation: ActivationLiteral | None
-) -> torch.nn.Module:
+def get_activation(activation: ActivationLiteral | None) -> torch.nn.Module:
     """Get PyTorch activation function by string query.
 
     Args:
@@ -32,19 +27,19 @@ def get_activation(
 
     # Normalization aliases
     alias_map = {
-        'none': 'identity',
-        'linear': 'identity',
+        "none": "identity",
+        "linear": "identity",
     }
     activation_str = alias_map.get(activation_str, activation_str)
 
     activations = {
-        'relu': torch.nn.ReLU,
-        'leakyrelu': torch.nn.LeakyReLU,
-        'selu': torch.nn.SELU,
-        'sigmoid': torch.nn.Sigmoid,
-        'softplus': torch.nn.Softplus,
-        'tanh': torch.nn.Tanh,
-        'identity': torch.nn.Identity,
+        "relu": torch.nn.ReLU,
+        "leakyrelu": torch.nn.LeakyReLU,
+        "selu": torch.nn.SELU,
+        "sigmoid": torch.nn.Sigmoid,
+        "softplus": torch.nn.Softplus,
+        "tanh": torch.nn.Tanh,
+        "identity": torch.nn.Identity,
     }
 
     try:

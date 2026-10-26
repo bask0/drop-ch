@@ -128,7 +128,7 @@ def run_inference(model: StreamflowNet, dataloader, device: str):
         Q_routed, *_ = model.inference_forward(batch)
 
         Q_instant = Q_instant.squeeze(-1)  # [N, T]
-        Q_routed = Q_routed.squeeze(-1)    # [N, T]
+        Q_routed = Q_routed.squeeze(-1)  # [N, T]
 
         # batch.y is Q_obs_m3s [N, T, 1]
         y = batch.y.squeeze(-1)  # [N, T]
@@ -142,8 +142,8 @@ def run_inference(model: StreamflowNet, dataloader, device: str):
                 "hru_idx": hru_idx,
                 "time_start": np.full(len(hru_idx), t_start),
                 "Q_instant_m3s": Q_instant.cpu().numpy(),  # instant routing (no routing weights)
-                "Q_routed_m3s": Q_routed.cpu().numpy(),    # randomly initialised RoutingModel
-                "Q_obs_m3s": y.cpu().numpy(),              # observed streamflow
+                "Q_routed_m3s": Q_routed.cpu().numpy(),  # randomly initialised RoutingModel
+                "Q_obs_m3s": y.cpu().numpy(),  # observed streamflow
             }
         )
 
@@ -217,9 +217,9 @@ def main(
         num_stat_routing_features=dm.num_stat_routing_features,
         num_dynamic_features=dm.num_dyn_features,
         prediction_length=dm.prediction_length,
-        norm_args_stat_features=dm.norm_args_stat_features,   # HRU-scale input stats ✓
-        norm_args_dyn_features=dm.norm_args_dyn_features,     # HRU-scale input stats ✓
-        norm_args_targets=lumped_norm_args_targets,            # lumped LogXp → correct mm/day output ✓
+        norm_args_stat_features=dm.norm_args_stat_features,  # HRU-scale input stats ✓
+        norm_args_dyn_features=dm.norm_args_dyn_features,  # HRU-scale input stats ✓
+        norm_args_targets=lumped_norm_args_targets,  # lumped LogXp → correct mm/day output ✓
         norm_args_stat_routing_features=dm.norm_args_stat_routing_features,
         runoff_use_pretrained=True,
         use_instant_routing=True,  # bypass untrained routing weights

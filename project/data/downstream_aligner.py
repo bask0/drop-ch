@@ -143,15 +143,13 @@ class DownstreamAligner(object):
             pass
         elif x.ndim == 2:
             if x.shape[1] != 1:
-                raise ValueError(
-                    f'`x` with two dimensions must have singular last dimension, but has shape {x.shape}.')
+                raise ValueError(f"`x` with two dimensions must have singular last dimension, but has shape {x.shape}.")
             x = x.squeeze(-1)
         else:
-            raise ValueError(
-                f'`x` must have one or two dimensions, has {x.ndim}.')
+            raise ValueError(f"`x` must have one or two dimensions, has {x.ndim}.")
 
         if self.n_cols is None:
-            raise RuntimeError('DownstreamAligner has not been initialized. Use ')
+            raise RuntimeError("DownstreamAligner has not been initialized. Use ")
 
         x_down = torch.zeros(size=(self.n_cols, self.k_hops), dtype=self.dtype, device=self.device)
         x_down[self.col, self.k] = x[self.row_subset]
@@ -175,16 +173,12 @@ class DownstreamAligner(object):
         """
 
         x_sparse = SparseTensor(
-            row=self.row,
-            col=self.col,
-            value=x_down[self.col, self.k],
-            sparse_sizes=(self.n_rows, self.n_cols))
+            row=self.row, col=self.col, value=x_down[self.col, self.k], sparse_sizes=(self.n_rows, self.n_cols)
+        )
 
         k_aligned = SparseTensor(
-            row=self.row,
-            col=self.col,
-            value=self.k,
-            sparse_sizes=(self.n_rows, self.n_cols)).coo()[2]
+            row=self.row, col=self.col, value=self.k, sparse_sizes=(self.n_rows, self.n_cols)
+        ).coo()[2]
 
         k_aligned = cast(Tensor, k_aligned)
 
@@ -209,13 +203,12 @@ class DownstreamAligner(object):
             row=self.row,
             col=self.col,
             value=torch.full_like(self.k, fill_value=fill_value, dtype=self.dtype),
-            sparse_sizes=(self.n_rows, self.n_cols))
+            sparse_sizes=(self.n_rows, self.n_cols),
+        )
 
         k_aligned = SparseTensor(
-            row=self.row,
-            col=self.col,
-            value=self.k,
-            sparse_sizes=(self.n_rows, self.n_cols)).coo()[2]
+            row=self.row, col=self.col, value=self.k, sparse_sizes=(self.n_rows, self.n_cols)
+        ).coo()[2]
 
         k_aligned = cast(Tensor, k_aligned)
 
@@ -237,18 +230,11 @@ class DownstreamAligner(object):
         """
 
         if x_down.ndim != 2:
-            raise ValueError(
-                f'`x_down` must have two dimensions, has {x_down.ndim}.'
-            )
+            raise ValueError(f"`x_down` must have two dimensions, has {x_down.ndim}.")
 
         if ((x_down < 0) | (x_down > 1)).any():
-            raise ValueError(
-                '`x_down` must contain values in range [0, 1].'
-            )
+            raise ValueError("`x_down` must contain values in range [0, 1].")
 
-        x_cum = torch.cat(
-            [
-                torch.ones_like(x_down[:, :1]), torch.cumprod(1 - x_down[:, :-1], dim=1)
-            ], dim=-1) * x_down
+        x_cum = torch.cat([torch.ones_like(x_down[:, :1]), torch.cumprod(1 - x_down[:, :-1], dim=1)], dim=-1) * x_down
 
         return x_cum

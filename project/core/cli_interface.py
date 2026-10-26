@@ -162,9 +162,7 @@ class CLI(LightningCLI):
             "data.norm_args_dyn_features", "model.init_args.norm_args_dyn_features", apply_on="instantiate"
         )
         parser.link_arguments("data.norm_args_targets", "model.init_args.norm_args_targets", apply_on="instantiate")
-        parser.link_arguments(
-            "tuning_engine.pruner.init_args.max_resource", "model.init_args.lr_cycle_epochs"
-        )
+        parser.link_arguments("tuning_engine.pruner.init_args.max_resource", "model.init_args.lr_cycle_epochs")
 
     def before_instantiate_classes(self):
         """

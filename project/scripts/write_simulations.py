@@ -27,67 +27,55 @@ def get_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
     for var in ds.data_vars:
         chunks = {}
         for dim in ds[var].dims:
-            if dim == 'time':
+            if dim == "time":
                 c = 1000
-            elif dim == 'hru':
+            elif dim == "hru":
                 c = 2000
             else:
                 c = len(ds[dim])
         chunks[dim] = c
 
         encoding[var] = {
-            'compressors': BloscCodec(
-                cname='zstd',
-                clevel=clevel,
-                shuffle=BloscShuffle.shuffle
-            ),
-            'chunks': tuple(chunks.values())
+            "compressors": BloscCodec(cname="zstd", clevel=clevel, shuffle=BloscShuffle.shuffle),
+            "chunks": tuple(chunks.values()),
         }
-        ds[var].encoding.pop('compressors', None)
-        ds[var].encoding.pop('chunks', None)
+        ds[var].encoding.pop("compressors", None)
+        ds[var].encoding.pop("chunks", None)
         ds[var] = ds[var].chunk(chunks)
         # if 'time' in ds[var].dims:
         #     ds[var] = ds[var].chunk(chunks)
 
     for coord in ds.coords:
         encoding[coord] = {
-            'compressors': BloscCodec(
-                cname="zstd",
-                clevel=1,
-                shuffle=BloscShuffle.shuffle
-            ),
+            "compressors": BloscCodec(cname="zstd", clevel=1, shuffle=BloscShuffle.shuffle),
         }
-        ds[coord].encoding.pop('compressors', None)
+        ds[coord].encoding.pop("compressors", None)
 
     return encoding
 
 
-ds = xr.open_zarr('/path/to/raw_data/machflow_routing/data/results/predictions.zarr')
+ds = xr.open_zarr("/path/to/raw_data/machflow_routing/data/results/predictions.zarr")
 
-ds = ds[[var for var in ds.data_vars if not str(var).endswith('mmd')]]
-ds = ds.drop_vars(['Q_emulated', 'Q_instant_pred_m3s'])
+ds = ds[[var for var in ds.data_vars if not str(var).endswith("mmd")]]
+ds = ds.drop_vars(["Q_emulated", "Q_instant_pred_m3s"])
 
-out_path = '/path/to/raw_data/machflow_routing/data/results/predictions_compressed.zarr'
+out_path = "/path/to/raw_data/machflow_routing/data/results/predictions_compressed.zarr"
 
 encoding = get_encoding(ds, clevel=7)
 
-print(f'Uncompressed size: {ds.nbytes / 1e9:0.1f} GB')
+print(f"Uncompressed size: {ds.nbytes / 1e9:0.1f} GB")
 
-print('Writing compressed Zarr file...')
+print("Writing compressed Zarr file...")
 
 with ProgressBar():
-    ds.to_zarr(
-        out_path,
-        encoding=encoding,
-        mode='w'
-    )
+    ds.to_zarr(out_path, encoding=encoding, mode="w")
 
-print('Compile into single file...')
+print("Compile into single file...")
 
 comp_path = out_path.replace(".zarr", ".tar.zarr")
 
-s = f'tar -cf {comp_path} {out_path}'
+s = f"tar -cf {comp_path} {out_path}"
 
 os.system(s)
 
-print(f'Done. Compressed Zarr file written to\n{comp_path}')
+print(f"Done. Compressed Zarr file written to\n{comp_path}")

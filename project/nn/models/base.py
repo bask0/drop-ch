@@ -19,11 +19,12 @@ class TorchNormalizer(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            norm_args_dyn_features: dict | None = None,
-            norm_args_stat_features: dict | None = None,
-            norm_args_stat_routing_features: dict | None = None,
-            norm_args_targets: dict | None = None) -> None:
+        self,
+        norm_args_dyn_features: dict | None = None,
+        norm_args_stat_features: dict | None = None,
+        norm_args_stat_routing_features: dict | None = None,
+        norm_args_targets: dict | None = None,
+    ) -> None:
         """
         Initialize module, should be subclassed.
 

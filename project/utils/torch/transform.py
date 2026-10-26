@@ -12,7 +12,7 @@ class TransformLayer(torch.nn.Module):
     Turn functions into layers.
     """
 
-    def __init__(self, transform_fun: Callable, name: str = 'Transform()') -> None:
+    def __init__(self, transform_fun: Callable, name: str = "Transform()") -> None:
         """Transform layer, applies `transform_fun`.
 
         Example:
@@ -49,5 +49,5 @@ class TransformLayer(torch.nn.Module):
         Returns:
             str: The name of the object.
         """
-        s = f'{self.name}'
+        s = f"{self.name}"
         return s

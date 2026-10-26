@@ -1104,7 +1104,6 @@ class GraphDataModule(pl.LightningDataModule):
         fold_idx: int = 0,  # Keep for compatibility, not used in this class.
         val_time_range: list[str] | None = None,
         skip_data_init: bool = False,
-
     ) -> None:
         """
         Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.

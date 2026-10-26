@@ -71,7 +71,7 @@ class RunoffModel(torch.nn.Module):
             hidden_size=hidden_size,
             lstm_layers=lstm_layers,
             variational_dropout=variational_dropout,
-            enc_dropout=enc_dropout
+            enc_dropout=enc_dropout,
         )
 
     def _model_forward(self, batch: HRUSample, subset: Tensor | None, sample_slice: slice | None = None) -> Tensor:
@@ -104,11 +104,8 @@ class RunoffModel(torch.nn.Module):
         return self.lstm(d, x)
 
     def forward(
-            self,
-            batch: HRUSample,
-            subset: Tensor | None,
-            scale_output: bool,
-            sample_slice: slice | None = None) -> Tensor:
+        self, batch: HRUSample, subset: Tensor | None, scale_output: bool, sample_slice: slice | None = None
+    ) -> Tensor:
         """
         Forward pass through the model.
 
@@ -127,11 +124,7 @@ class RunoffModel(torch.nn.Module):
 
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
-    def chunked_forward(
-            self,
-            batch: HRUSample,
-            scale_output: bool,
-            subset: Tensor | None = None) -> Tensor:
+    def chunked_forward(self, batch: HRUSample, scale_output: bool, subset: Tensor | None = None) -> Tensor:
         """
         Memory-efficient forward pass using chunking to avoid OOM issues.
 
@@ -195,10 +188,10 @@ class RunoffModel(torch.nn.Module):
 
         # Retrieve auxiliary variables from the batch
         # These include lake masks, precipitation, air temperature, reference flow (Q95), and HRU area
-        is_lake = cast(Tensor, batch.is_lake == 1.0)       # Boolean mask indicating lake HRUs
-        prec = cast(Tensor, batch.prec)                    # Precipitation [mm/day]
-        tair = cast(Tensor, batch.tair)                    # Air temperature [°C]
-        hru_area = cast(Tensor, batch.hru_area)            # Area per HRU [km²]
+        is_lake = cast(Tensor, batch.is_lake == 1.0)  # Boolean mask indicating lake HRUs
+        prec = cast(Tensor, batch.prec)  # Precipitation [mm/day]
+        tair = cast(Tensor, batch.tair)  # Air temperature [°C]
+        hru_area = cast(Tensor, batch.hru_area)  # Area per HRU [km²]
 
         # Apply subset slicing if provided
         if subset is not None:

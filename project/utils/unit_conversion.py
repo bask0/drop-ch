@@ -13,32 +13,26 @@ NUMERIC_TYPES = (float, np.ndarray, Tensor, xr.DataArray)
 def check_type(x: Numeric, area: Numeric) -> None:
     """Check if both x and area are of the same type and of type Numeric."""
     if not type(x) is type(area):
-        raise TypeError(
-            f"Both x and area must be of the same type. Received types: x: {type(x)}, area: {type(area)}"
-        )
+        raise TypeError(f"Both x and area must be of the same type. Received types: x: {type(x)}, area: {type(area)}")
 
     if not isinstance(x, NUMERIC_TYPES):
         raise TypeError(f"x must be of type Numeric, got {type(x)}")
 
 
 @overload
-def convert_mmd_to_m3s(x: float, area: float) -> float:
-    ...
+def convert_mmd_to_m3s(x: float, area: float) -> float: ...
 
 
 @overload
-def convert_mmd_to_m3s(x: NDArray, area: NDArray) -> NDArray:
-    ...
+def convert_mmd_to_m3s(x: NDArray, area: NDArray) -> NDArray: ...
 
 
 @overload
-def convert_mmd_to_m3s(x: Tensor, area: Tensor) -> Tensor:
-    ...
+def convert_mmd_to_m3s(x: Tensor, area: Tensor) -> Tensor: ...
 
 
 @overload
-def convert_mmd_to_m3s(x: xr.DataArray, area: xr.DataArray) -> xr.DataArray:
-    ...
+def convert_mmd_to_m3s(x: xr.DataArray, area: xr.DataArray) -> xr.DataArray: ...
 
 
 def convert_mmd_to_m3s(x: Numeric, area: Numeric) -> Numeric:
@@ -59,23 +53,19 @@ def convert_mmd_to_m3s(x: Numeric, area: Numeric) -> Numeric:
 
 
 @overload
-def convert_m3s_to_mmd(x: float, area: float) -> float:
-    ...
+def convert_m3s_to_mmd(x: float, area: float) -> float: ...
 
 
 @overload
-def convert_m3s_to_mmd(x: NDArray, area: NDArray) -> NDArray:
-    ...
+def convert_m3s_to_mmd(x: NDArray, area: NDArray) -> NDArray: ...
 
 
 @overload
-def convert_m3s_to_mmd(x: Tensor, area: Tensor) -> Tensor:
-    ...
+def convert_m3s_to_mmd(x: Tensor, area: Tensor) -> Tensor: ...
 
 
 @overload
-def convert_m3s_to_mmd(x: xr.DataArray, area: xr.DataArray) -> xr.DataArray:
-    ...
+def convert_m3s_to_mmd(x: xr.DataArray, area: xr.DataArray) -> xr.DataArray: ...
 
 
 def convert_m3s_to_mmd(x: Numeric, area: Numeric) -> Numeric:
@@ -117,10 +107,10 @@ def convert_xr_mmd_to_m3s(ds: xr.Dataset, variables: list[str], area_var: str = 
 
     for variable in variables:
         # Note that area is in km2.
-        if variable.endswith('_mmd'):
-            new_variable = variable.replace('_mmd', '_m3s')
+        if variable.endswith("_mmd"):
+            new_variable = variable.replace("_mmd", "_m3s")
         else:
-            new_variable = variable + '_m3s'
+            new_variable = variable + "_m3s"
         ds[new_variable] = convert_mmd_to_m3s(x=ds[variable], area=ds[area_var])
 
     return ds
@@ -148,10 +138,10 @@ def convert_xr_m3s_to_mmd(ds: xr.Dataset, variables: list[str], area_var: str = 
 
     for variable in variables:
         # Note that area is in km2.
-        if variable.endswith('_m3s'):
-            new_variable = variable.replace('_m3s', '_mmd')
+        if variable.endswith("_m3s"):
+            new_variable = variable.replace("_m3s", "_mmd")
         else:
-            new_variable = variable + '_mmd'
+            new_variable = variable + "_mmd"
         ds[new_variable] = convert_m3s_to_mmd(x=ds[variable], area=ds[area_var])
 
     return ds

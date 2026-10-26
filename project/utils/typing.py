@@ -24,7 +24,7 @@ def assert_non_NaN(x: AnyNotNone | None) -> AnyNotNone:
     """
 
     if x is None:
-        raise ValueError('Input is None.')
+        raise ValueError("Input is None.")
 
     return x
 
@@ -93,7 +93,7 @@ class HRUSample:
     water_freq: Tensor | None
     time_slice: list[int]
 
-    def to(self, device: torch.device | str) -> 'HRUSample':
+    def to(self, device: torch.device | str) -> "HRUSample":
         """
         Move all Tensor fields of the HRUSample instance to the specified device.
 
