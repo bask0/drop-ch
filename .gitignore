@@ -44,8 +44,9 @@ slurm/cluster.sh
 *.tmp
 *.old
 **/best_config.yaml
-**/trial_*/  # Tuning folders
-**/fold_*/   # XVal folders
+# Tuning and cross-validation folders
+**/trial_*/
+**/fold_*/
 
 # === VSCode and IDEs ===
 .vscode/
