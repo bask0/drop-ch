@@ -33,6 +33,8 @@ logger.info(f"Processing MERIT data in target directory: `{data_dir}`")
 
 # for var in ['dir', 'elv', 'upa', 'upg', 'wth', 'hnd']:
 for var in ["elv"]:
+    # Defined before `try`, so the clean-up in `finally` also works if the download fails.
+    tiff_dir = data_dir / f"{var}_n30e000/"
     try:
         dataset = f"{var}_n30e000.tar"
 
@@ -46,7 +48,7 @@ for var in ["elv"]:
 
         tar_dataset = data_dir / dataset
         if not tar_dataset.exists():
-            raise FileNotFoundError("download fialed, no file found at `{tar_dataset}`")
+            raise FileNotFoundError(f"download failed, no file found at `{tar_dataset}`")
 
         logger.info("  > Decompressing...")
         scall = f"tar -xf {tar_dataset}  -C {data_dir}"
@@ -54,8 +56,6 @@ for var in ["elv"]:
 
         logger.info("  > Combine parts...")
         da_list = []
-
-        tiff_dir = data_dir / f"{var}_n30e000/"
 
         for n in ["45"]:
             for e in ["005", "010"]:
@@ -123,7 +123,7 @@ for variable in (pbar := tqdm(variables)):
 
             num_fails = 99
 
-        except Exception as e:
+        except Exception:
             num_fails += 1
 
             if num_fails == 3:

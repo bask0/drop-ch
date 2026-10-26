@@ -89,13 +89,10 @@ class TuningEngine:
     cross-validation, and manages experiment artifacts such as configuration files, logs, and best models.
 
     Note that experiment directory and log directory are separated, as logs can be large and don't belong
-    into the code base. the log directory is symlinked into the experiment directory for easy access with
-    name '[exp_dir]/logs'.
+    into the code base.
 
     Directory Structure:
-        - `exp_dir`: Main experiment directory.
-            - `config.yaml`: Base configuration file.
-            - `logs`: Symlink to the logging directory.
+        - `exp_dir`: Experiment directory in the code base, containing the configuration files.
         - `log_dir`: Directory for logs and Optuna databases.
             - `tune`: Directory for hyperparameter tuning trials.
                 - `optuna.db`: Optuna database for tuning (with study name [EXPERIMENT_NAME]).
@@ -105,13 +102,13 @@ class TuningEngine:
                 - `fold_000`, ..., `fold_nnn`: Subdirectories for each cross-validation fold.
 
     Key Features:
-        - Automated setup and cleanup of experiment directories and symlinks.
+        - Automated setup and cleanup of the tuning and cross-validation directories.
         - Flexible search space definition and parameter sampling for Optuna studies.
         - Seamless integration with PyTorch Lightning's CLI for model training and evaluation.
         - Support for both hyperparameter tuning (with pruning) and cross-validation (with brute-force sampling).
-        - Automatic management and copying of the best configuration file.
+        - Cross-validation with the configuration of the best tuning trial.
         - Robust handling of study creation, loading, and storage using SQLite databases.
-        - Utility methods for argument parsing, directory flattening, and symlink creation.
+        - Utility methods for argument parsing and dictionary flattening.
 
     Usage:
         1. Instantiate with the desired sampler, pruner, search space, and directory paths.
@@ -269,7 +266,6 @@ class TuningEngine:
         Side Effects:
             - Creates or resets directories for tuning and/or cross-validation as needed.
             - Initializes Optuna studies for tuning and/or cross-validation.
-            - Creates a symlink for the log directory in the experiment directory.
         """
 
         if which not in ("all", "tune", "xval"):
@@ -304,8 +300,6 @@ class TuningEngine:
             else:
                 self._create_dirs_if_needed(self.xval_dir, remove=True)
                 self._init_optuna_study(self.xval_db)
-
-        # self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite or self.resume)
 
     def tune(self) -> optuna.Study:
         """Run the hyperparameter tuning process using Optuna and manages the best configuration.
@@ -807,41 +801,6 @@ class TuningEngine:
 
         if path.exists():
             raise OSError(f"Cannot remove directory: {path}. It may contain busy files or directories.")
-
-    @staticmethod
-    def _create_symlink(source: Path | str, target: Path | str, force: bool = True) -> None:
-        """Create a symbolic link pointing from `target` to `source`.
-
-        Args:
-            source (Path | str): The original file or directory.
-            target (Path | str): The symlink to create or replace.
-            force (bool): If True, removes any existing file, symlink, or directory at `target`.
-
-        Raises:
-            ValueError: If the source does not exist.
-        """
-
-        source = Path(source).resolve()
-        target = Path(target)
-
-        if not source.exists():
-            raise ValueError(f"Source path does not exist: {source}")
-
-        if target.exists() or target.is_symlink():
-            if force:
-                if target.is_symlink() or target.is_file():
-                    target.unlink()
-                elif target.is_dir():
-                    # Only remove directory if it's a broken symlink or explicitly forced
-                    if target.is_symlink():
-                        target.unlink()
-                    else:
-                        raise FileExistsError(f"Target is a non-symlink directory: {target}")
-            else:
-                raise FileExistsError(f"Target already exists: {target}")
-
-        target.symlink_to(source, target_is_directory=source.is_dir())
-        logger.info(f"Created symlink: {target} → {source}")
 
     def _flatten_dict(self, d: dict, parent_key: str = "", sep: str = ".") -> dict[str, dict]:
         """Recursively flattens a nested dictionary, concatenating keys with a separator.

@@ -34,7 +34,7 @@ DATASET_NAME = "harmonized_hru_data.zarr"
 
 
 def load_paths_config() -> dict:
-    """Load experiments/paths.yaml, returning an empty dict if it's missing or malformed."""
+    """Load experiments/paths.yaml, returning an empty dict if it does not exist."""
     try:
         with PATHS_CONFIG.open() as f:
             return yaml.safe_load(f) or {}
