@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Absolute paths that point to a specific machine or are placeholders for one, e.g. /cluster/..., /net/...,
 # /home/... or /path/to/.... Preceded by a quote, whitespace, `=` or line start, so `/some/path/to/` in prose and
 # relative paths do not match.
-MACHINE_PATH = re.compile(r"""(?:^|["'\s=(])/(?:cluster|net|home|scratch|path/to)/""")
+MACHINE_PATH = re.compile(r"""(?:^|["'\s=(])/(?:cluster|net|home|scratch|work|gpfs|mnt|Users|path/to)/""")
 
 
 requires_local_paths = pytest.mark.skipif(not PATHS_CONFIG.exists(), reason=f"{PATHS_CONFIG} not created yet.")
@@ -51,10 +51,10 @@ def test_unknown_key_raises():
 
 
 def _tracked_files() -> list[Path]:
-    """Tracked Python, shell, YAML and notebook files."""
+    """Tracked Python, shell, YAML, TOML and notebook files (the README shows placeholder paths on purpose)."""
 
     out = subprocess.run(
-        ["git", "ls-files", "*.py", "*.sh", "*.yaml", "*.yml", "*.ipynb"],
+        ["git", "ls-files", "*.py", "*.sh", "*.yaml", "*.yml", "*.toml", "*.ipynb"],
         capture_output=True,
         text=True,
         check=True,
@@ -64,13 +64,13 @@ def _tracked_files() -> list[Path]:
 
 
 def _source_lines(file: Path) -> list[str]:
-    """Lines of a source file; for notebooks, the code cell sources (saved outputs are not checked)."""
+    """Lines of a source file; for notebooks, the code and markdown cell sources (outputs are checked in CI)."""
 
     if file.suffix != ".ipynb":
         return file.read_text().splitlines()
 
     cells = json.loads(file.read_text())["cells"]
-    return [line for cell in cells if cell["cell_type"] == "code" for line in cell["source"]]
+    return [line for cell in cells for line in cell["source"]]
 
 
 def test_no_machine_specific_paths_outside_paths_config():
