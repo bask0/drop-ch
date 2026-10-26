@@ -19,6 +19,7 @@ PREV_XVAL_JOB=""
 for SPLIT in random hard; do
 
     CONFIG_ARGS=(
+        -c experiments/paths.yaml
         -c experiments/base_config.yaml
         -c experiments/instant/config.yaml
         -c experiments/instant/$SPLIT/config.yaml

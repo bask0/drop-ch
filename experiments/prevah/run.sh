@@ -15,6 +15,7 @@ SBATCH_ARGS=(
 )
 
 CONFIG_ARGS=(
+    -c experiments/paths.yaml
     -c experiments/base_config.yaml
     -c experiments/prevah/config.yaml
     # -c experiments/fast_dev_run_config.yaml
