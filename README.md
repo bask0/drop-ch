@@ -54,6 +54,7 @@ This project uses [pixi](https://pixi.sh) for environment management.
 git clone <this-repo-url>
 cd streamflow-net
 pixi install
+pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 ```
 
 ## Usage
