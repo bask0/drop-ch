@@ -1,4 +1,5 @@
-# Runs the test suite and ruff on CPU in the locked pixi environment. Tests that need the real dataset are skipped.
+# Runs ruff, checks that notebooks have no outputs, and runs the test suite on CPU in the locked pixi environment.
+# Tests that need the real dataset are skipped.
 name: Tests
 
 on:
@@ -28,6 +29,9 @@ jobs:
         run: |
           pixi run ruff check .
           pixi run ruff format --check .
+
+      - name: Check notebooks have no outputs
+        run: pixi run nbstripout --verify $(git ls-files '*.ipynb')
 
       - name: Test
         run: pixi run pytest -ra

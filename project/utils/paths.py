@@ -26,6 +26,7 @@ PATH_KEYS = {
     "meteoswiss_root": "MeteoSwiss gridded data archive (preprocessing only).",
     "era5land_root": "ERA5-Land archive with the processed 0.1 degree data (preprocessing only).",
     "machflow_root": "Companion machflow project with CAMELS-CH, stations and benchmark runs (notebooks only).",
+    "predictions_file": "Combined predictions of all models, predictions_combined.zarr (notebooks only).",
 }
 
 # Name of the dataset inside `data_root`, as referenced by the experiment configs.
