@@ -16,6 +16,7 @@ from tqdm import tqdm
 from project.utils.paths import get_path
 
 logging.basicConfig(format="%(asctime)s | %(message)s", level=logging.INFO, datefmt="%m/%d/%Y %I:%M:%S %p")
+logger = logging.getLogger(__name__)
 
 data_dir = get_path("geodata_root") / "merit"
 nc_file = data_dir / "merit.nc"
@@ -28,15 +29,15 @@ if nc_file.exists():
 
 ds = xr.Dataset()
 
-logging.info(f"Processing MERIT data in target directory: `{data_dir}`")
+logger.info(f"Processing MERIT data in target directory: `{data_dir}`")
 
 # for var in ['dir', 'elv', 'upa', 'upg', 'wth', 'hnd']:
 for var in ["elv"]:
     try:
         dataset = f"{var}_n30e000.tar"
 
-        logging.info(f" > Processing dataset `{dataset}`")
-        logging.info("  > Downloading...")
+        logger.info(f" > Processing dataset `{dataset}`")
+        logger.info("  > Downloading...")
 
         url = f"https://hydro.iis.u-tokyo.ac.jp/~yamadai/MERIT_Hydro/distribute/v1.0/{dataset}"
         # This is the University of Tokyo's public shared login for MERIT-Hydro downloads, not a personal credential.
@@ -47,11 +48,11 @@ for var in ["elv"]:
         if not tar_dataset.exists():
             raise FileNotFoundError("download fialed, no file found at `{tar_dataset}`")
 
-        logging.info("  > Decompressing...")
+        logger.info("  > Decompressing...")
         scall = f"tar -xf {tar_dataset}  -C {data_dir}"
         os.system(scall)
 
-        logging.info("  > Combine parts...")
+        logger.info("  > Combine parts...")
         da_list = []
 
         tiff_dir = data_dir / f"{var}_n30e000/"
@@ -69,20 +70,20 @@ for var in ["elv"]:
         ds[var] = da
 
     finally:
-        logging.info("  > Clean up...")
+        logger.info("  > Clean up...")
 
         shutil.rmtree(tiff_dir, ignore_errors=True)
 
         for path in data_dir.glob("*.tar"):
             os.remove(path)
 
-    logging.info("   > Done.")
+    logger.info("   > Done.")
 
 
 # lon: 5.668945  11.196506
 # lat: 45.312518 48.483846
 
-logging.info(f"Saving result to file: `{nc_file}`")
+logger.info(f"Saving result to file: `{nc_file}`")
 ds = (
     ds.drop_vars("band")
     .isel(band=0)
@@ -95,7 +96,7 @@ ds = ds.drop_vars("spatial_ref")
 
 ds.to_netcdf(nc_file)
 
-logging.info("Done.")
+logger.info("Done.")
 
 data_dir = get_path("geodata_root") / "soilgrids"
 
@@ -126,7 +127,7 @@ for variable in (pbar := tqdm(variables)):
             num_fails += 1
 
             if num_fails == 3:
-                raise e
+                raise
 
     for depth in depths:
         if wcs is None:

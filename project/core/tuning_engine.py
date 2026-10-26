@@ -841,7 +841,7 @@ class TuningEngine:
                 raise FileExistsError(f"Target already exists: {target}")
 
         target.symlink_to(source, target_is_directory=source.is_dir())
-        logging.info(f"Created symlink: {target} → {source}")
+        logger.info(f"Created symlink: {target} → {source}")
 
     def _flatten_dict(self, d: dict, parent_key: str = "", sep: str = ".") -> dict[str, dict]:
         """Recursively flattens a nested dictionary, concatenating keys with a separator.

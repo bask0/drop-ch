@@ -184,7 +184,7 @@ class DownstreamAligner:
 
         return x_sparse, k_aligned
 
-    def full_like_sparse(self, fill_value: float | int | bool) -> tuple[SparseTensor, Tensor]:
+    def full_like_sparse(self, fill_value: float | bool) -> tuple[SparseTensor, Tensor]:
         """Create a sparse adjacency representation filled with fill_value.
 
         Given a downstream-aligned NxK tensor, this method creates a sparse NxN matrix filled with
