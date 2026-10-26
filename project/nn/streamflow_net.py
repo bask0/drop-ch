@@ -16,9 +16,9 @@ from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
 
 from project.nn.models import EvaporationModel, RoutingModel, RunoffModel
-from project.nn.models.base import TorchNormalizer
 from project.nn.runoff_net import RunoffNet
 from project.utils.torch.loss import QLoss
+from project.utils.torch.normalize import TorchNormalizer
 from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
@@ -551,14 +551,14 @@ class StreamflowNet(pl.LightningModule):
             All tensor values are moved to CPU.
         """
 
-        Q, S, R, T, D, k, q, e, retention = self.inference_forward(batch=batch)
+        Q, S, R, T, D, k, q, e, _retention = self.inference_forward(batch=batch)
         _, Q_instant = self.instant_forward(batch=batch)
 
         k_hops = batch.k_hops[0].item()  # type: ignore
 
-        row, col, val = T.coo()
+        _, col, val = T.coo()
         T_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
-        row, col, val = D.coo()
+        _, col, val = D.coo()
         D_down = SparseTensor(row=col, col=k, value=val, sparse_sizes=(None, k_hops)).to_dense()
 
         data = {
@@ -727,7 +727,7 @@ class StreamflowNet(pl.LightningModule):
         self.log_dict(
             {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == "train" else False,
+            on_step=mode == "train",
             on_epoch=True,
             batch_size=batch.batch_size if mode == "train" else batch.has_obs.sum().item(),  # type: ignore
         )
@@ -821,7 +821,7 @@ class StreamflowNet(pl.LightningModule):
 
         if len(hits) == 0:
             raise FileNotFoundError(f"No '**/tune/optuna.db' files found in '{experiment_dir}'.")
-        elif len(hits) > 1:
+        if len(hits) > 1:
             raise ValueError(
                 f"Multiple '**/tune/optuna.db' files found in '{experiment_dir}', please specify "
                 f"a directory with only one such file. Hits were:"

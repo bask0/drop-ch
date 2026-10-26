@@ -1,14 +1,15 @@
 """Data utilities."""
 
-from glob import glob
 import os
+from glob import glob
 from pathlib import Path
+
 import geopandas as gpd
+import numpy as np
+import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
-import numpy as np
 from rasterio import features as rio_features
-import xarray as xr
 
 from project.core.utils import get_zarr_v3_encoding
 
@@ -20,6 +21,7 @@ def sel_cv_set(ds: xr.Dataset, cv_sets: int | list[int]) -> xr.Dataset:
         ds (xr.Dataset): Dataset containing cross-validation sets.
         cv_sets (int | list[int]): Cross-validation sets to select. Can be a single integer or a list of integers.
             0: no set, 1: train, 2: valid, 3: test.
+
     Returns:
         xr.Dataset: Dataset filtered by the specified cross-validation sets.
 
@@ -29,17 +31,15 @@ def sel_cv_set(ds: xr.Dataset, cv_sets: int | list[int]) -> xr.Dataset:
 
     for cv_set in cv_sets:
         for cv_set in cv_sets:
-            if cv_set not in range(0, 4):
+            if cv_set not in range(4):
                 raise ValueError(
-                    '\'cv_sets\' must contain integers in range [0, 3], where '
-                    f'0=not used, 1=training, 2=validation, 3=test, but is `{cv_set}`,'
+                    "'cv_sets' must contain integers in range [0, 3], where "
+                    f"0=not used, 1=training, 2=validation, 3=test, but is `{cv_set}`,"
                 )
     return ds.sel(hru=ds.subset.isin(cv_sets))
 
 
-def load_xval_test_set(
-        xval_dir: str | os.PathLike,
-        **subset) -> xr.Dataset:
+def load_xval_test_set(xval_dir: str | os.PathLike, **subset) -> xr.Dataset:
     """Load cross-validation test set from a directory.
 
     Args:
@@ -52,22 +52,16 @@ def load_xval_test_set(
 
     """
 
-    paths = glob(os.path.join(xval_dir, 'fold_*/preds.zarr'))
+    paths = glob(os.path.join(xval_dir, "fold_*/preds.zarr"))
 
     ds = xr.open_mfdataset(
-        paths=paths,
-        engine='zarr',
-        concat_dim='hru',
-        combine='nested',
-        preprocess=lambda x: sel_cv_set(ds=x, cv_sets=3))
+        paths=paths, engine="zarr", concat_dim="hru", combine="nested", preprocess=lambda x: sel_cv_set(ds=x, cv_sets=3)
+    )
 
     return ds.sel(**subset).compute()
 
 
-def enrich(
-        ds: xr.Dataset | xr.DataArray,
-        hrus: gpd.GeoDataFrame,
-        variables: str | list[str]) -> gpd.GeoDataFrame:
+def enrich(ds: xr.Dataset | xr.DataArray, hrus: gpd.GeoDataFrame, variables: str | list[str]) -> gpd.GeoDataFrame:
     """Enrich GeoDataFrame with variables from xarray Dataset or DataArray.
 
     Args:
@@ -85,15 +79,15 @@ def enrich(
             ds = ds.to_dataset(name=variables[0])
     elif isinstance(variables, list):
         if isinstance(ds, xr.DataArray):
-            raise ValueError('If \'ds\' is a DataArray, \'variables\' must be a string.')
+            raise ValueError("If 'ds' is a DataArray, 'variables' must be a string.")
     else:
-        raise ValueError('\'variables\' must be a string or a list of strings.')
+        raise ValueError("'variables' must be a string or a list of strings.")
 
     hrus = hrus.copy()
 
     for var in variables:
         if var not in ds.data_vars:
-            raise ValueError(f'Variable {var} not found in DataArray \'ds\'.')
+            raise ValueError(f"Variable {var} not found in DataArray 'ds'.")
 
         hrus[var] = gpd.pd.Series(dtype=ds[var].dtype)
         hrus.loc[ds.hru.values, var] = ds[var].values
@@ -117,7 +111,7 @@ def sel_subset(ds: xr.Dataset, subset: int | list[int], drop: bool = True) -> xr
         xr.Dataset: Subset of the input dataset.
     """
 
-    if 'subset' not in ds:
+    if "subset" not in ds:
         raise ValueError("Input dataset must have a 'subset' dimension.")
 
     if isinstance(subset, int):
@@ -136,19 +130,20 @@ def sel_subset(ds: xr.Dataset, subset: int | list[int], drop: bool = True) -> xr
 
 
 def load_hillshade(
-        hillshade_dir: str | Path,
-        hrus: gpd.GeoDataFrame,
-        ds: xr.Dataset,
-        dem_path: str | Path,
-        use_terrain: bool = False,
-        use_slope_for_lake_mask: bool = True,
-        lake_rgb: tuple[int, int, int] | None = None,
-        target_crs: str = 'EPSG:2056',
-        force_recompute: bool = False) -> xr.Dataset:
+    hillshade_dir: str | Path,
+    hrus: gpd.GeoDataFrame,
+    ds: xr.Dataset,
+    dem_path: str | Path,
+    use_terrain: bool = False,
+    use_slope_for_lake_mask: bool = True,
+    lake_rgb: tuple[int, int, int] | None = None,
+    target_crs: str = "EPSG:2056",
+    force_recompute: bool = False,
+) -> xr.Dataset:
     """Load or compute hillshade from MERIT DEM.
 
     Args:
-        hillshade_path: Path to Zarr file to load/store hillshade.
+        hillshade_dir: Directory of the Zarr file to load/store hillshade.
         hrus: GeoDataFrame with HRU polygons.
         ds: Dataset with HRU IDs and lake mask.
         dem_path: Path to DEM.
@@ -164,15 +159,14 @@ def load_hillshade(
     """
 
     hillshade_dir = Path(hillshade_dir)
-    if not hillshade_dir.exists():
-        FileNotFoundError(f'Hillshade directory {hillshade_dir} does not exist.')
+    hillshade_dir.mkdir(parents=True, exist_ok=True)
 
     dem_path = Path(dem_path)
-    
+
     if use_terrain:
-        hillshade_path = hillshade_dir / 'hillshade_with_terrain.zarr'
+        hillshade_path = hillshade_dir / "hillshade_with_terrain.zarr"
     else:
-        hillshade_path = hillshade_dir / 'hillshade.zarr'
+        hillshade_path = hillshade_dir / "hillshade.zarr"
 
     if lake_rgb is None:
         lake_rgb = (174, 216, 229)  # light blue
@@ -182,12 +176,12 @@ def load_hillshade(
     if not force_recompute and Path(hillshade_path).exists():
         return xr.open_zarr(hillshade_path).hs
 
-    dem = xr.open_dataset(dem_path).rio.write_crs('EPSG:4326')
+    dem = xr.open_dataset(dem_path).rio.write_crs("EPSG:4326")
 
-    dem.rio.set_spatial_dims(x_dim='lon', y_dim='lat', inplace=True)
+    dem.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
 
     dem = dem.rio.reproject(target_crs, resolution=90)
-    dem = dem.rename({'x': 'lon', 'y': 'lat'})
+    dem = dem.rename({"x": "lon", "y": "lat"})
 
     alt_deg = 45.0  # sun altitude (elevation)
     az_deg = 315.0  # sun azimuth (0° = North, clockwise)
@@ -196,20 +190,21 @@ def load_hillshade(
     az = np.deg2rad(az_deg)
 
     # slope is percent → radians
-    slope = np.arctan(dem['slope'] / 100.0)
+    slope = np.arctan(dem["slope"] / 100.0)
 
     # If your aspect is 0°=East, CCW **and points upslope**, convert to 0°=North, CW **downslope**
-    aspect_deg_nc = (90.0 - dem['aspect']) % 360.0     # East-CCW → North-CW
-    aspect_deg_nc = (aspect_deg_nc + 180.0) % 360.0    # upslope → downslope
+    aspect_deg_nc = (90.0 - dem["aspect"]) % 360.0  # East-CCW → North-CW
+    aspect_deg_nc = (aspect_deg_nc + 180.0) % 360.0  # upslope → downslope
     aspect = np.deg2rad(aspect_deg_nc)
 
     hs_float = np.sin(e) * np.cos(slope) + np.cos(e) * np.sin(slope) * np.cos(az - aspect)
     hs_float = np.clip(hs_float, 0, 1)
 
-    hs_float.rio.set_spatial_dims(x_dim='lon', y_dim='lat', inplace=True)
+    hs_float.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
 
     if use_slope_for_lake_mask:
         from scipy.ndimage import binary_opening
+
         mask = np.logical_not(binary_opening((dem.slope.values < 0.1), structure=np.ones((9, 9))))
     else:
         hru_lakes = hrus.loc[ds.hru.where(ds.is_lake.compute(), drop=True)].to_crs(hs_float.rio.crs)
@@ -218,13 +213,10 @@ def load_hillshade(
             [geom for geom in hru_lakes.geometry if not geom.is_empty],
             out_shape=hs_float.shape,
             transform=hs_float.rio.transform(),
-            invert=False)
+            invert=False,
+        )
 
-    mask_da = xr.DataArray(
-        mask,
-        coords={'lat': hs_float['lat'], 'lon': hs_float['lon']},
-        dims=('lat', 'lon')
-    )
+    mask_da = xr.DataArray(mask, coords={"lat": hs_float["lat"], "lon": hs_float["lon"]}, dims=("lat", "lon"))
 
     if use_terrain:
         elv = dem.elv
@@ -237,7 +229,7 @@ def load_hillshade(
 
         # Apply a colormap to create an RGB image
         cmap = plt.get_cmap("gist_earth")  # e.g., 'terrain', 'viridis'
-        rgba = cmap(norm_dem)           # shape = (H, W, 4) with alpha
+        rgba = cmap(norm_dem)  # shape = (H, W, 4) with alpha
         color_relief_rgb = rgba[:, :, :3]
 
         dem_hsv = rgb_to_hsv(color_relief_rgb)
@@ -250,18 +242,17 @@ def load_hillshade(
 
         rgb = xr.DataArray(
             rgb,
-            coords={'lat': hs_float['lat'], 'lon': hs_float['lon'], 'channel': ['R', 'G', 'B']},
-            dims=('lat', 'lon', 'channel')
+            coords={"lat": hs_float["lat"], "lon": hs_float["lon"], "channel": ["R", "G", "B"]},
+            dims=("lat", "lon", "channel"),
         )
 
     else:
+        rgb = hs_float.expand_dims(channel=["R", "G", "B"], axis=-1).compute()
 
-        rgb = hs_float.expand_dims(channel=['R', 'G', 'B'], axis=-1).compute()
-
-    hillshade = rgb.where(mask_da, np.asarray(lake_rgb)[None, None, :] / 255).to_dataset(name='hs')
+    hillshade = rgb.where(mask_da, np.asarray(lake_rgb)[None, None, :] / 255).to_dataset(name="hs")
 
     enc = get_zarr_v3_encoding(hillshade)
 
-    hillshade.to_zarr(hillshade_path, mode='w', encoding=enc)
+    hillshade.to_zarr(hillshade_path, mode="w", encoding=enc)
 
     return hillshade.hs

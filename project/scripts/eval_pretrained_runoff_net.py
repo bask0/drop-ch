@@ -1,4 +1,4 @@
-"""Evaluate the pretrained RunoffNet as a component of StreamflowNet (before fine-tuning).
+r"""Evaluate the pretrained RunoffNet as a component of StreamflowNet (before fine-tuning).
 
 Instantiates StreamflowNet with:
   - pretrained RunoffNet weights (from the lumped experiment)
@@ -13,8 +13,8 @@ feature lists, data path, and lumped experiment dir.
 
 Usage
 -----
-python -m project.scripts.eval_pretrained_runoff_net \\
-    --streamflow_config experiments/routed/random/config.yaml \\
+python -m project.scripts.eval_pretrained_runoff_net \
+    --streamflow_config experiments/routed/random/config.yaml \
     --output_path /tmp/pretrained_runoff_eval.nc
 """
 
@@ -35,6 +35,7 @@ from project.nn.streamflow_net import StreamflowNet
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the command line arguments."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--streamflow_config",
@@ -59,6 +60,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_yaml(path: str | Path) -> dict:
+    """Load a YAML file into a dict."""
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -128,7 +130,7 @@ def run_inference(model: StreamflowNet, dataloader, device: str):
         Q_routed, *_ = model.inference_forward(batch)
 
         Q_instant = Q_instant.squeeze(-1)  # [N, T]
-        Q_routed = Q_routed.squeeze(-1)    # [N, T]
+        Q_routed = Q_routed.squeeze(-1)  # [N, T]
 
         # batch.y is Q_obs_m3s [N, T, 1]
         y = batch.y.squeeze(-1)  # [N, T]
@@ -142,8 +144,8 @@ def run_inference(model: StreamflowNet, dataloader, device: str):
                 "hru_idx": hru_idx,
                 "time_start": np.full(len(hru_idx), t_start),
                 "Q_instant_m3s": Q_instant.cpu().numpy(),  # instant routing (no routing weights)
-                "Q_routed_m3s": Q_routed.cpu().numpy(),    # randomly initialised RoutingModel
-                "Q_obs_m3s": y.cpu().numpy(),              # observed streamflow
+                "Q_routed_m3s": Q_routed.cpu().numpy(),  # randomly initialised RoutingModel
+                "Q_obs_m3s": y.cpu().numpy(),  # observed streamflow
             }
         )
 
@@ -154,6 +156,7 @@ def run_inference(model: StreamflowNet, dataloader, device: str):
 
 
 def print_summary(pred: np.ndarray, obs: np.ndarray, label: str) -> None:
+    """Print bias, RMSE and NSE of `pred` against `obs`, ignoring non-finite pairs."""
     mask = np.isfinite(obs) & np.isfinite(pred)
     obs_m, pred_m = obs[mask], pred[mask]
     if len(obs_m) == 0:
@@ -186,6 +189,10 @@ def main(
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     n_catchments: int = 1,  # use the N smallest outlets by upstream area
 ) -> None:
+    """Evaluate the pretrained RunoffNet with instant routing and write predictions to `output_path`.
+
+    Arguments given on the command line override the function arguments.
+    """
     if sys.argv[0].endswith(("eval_pretrained_runoff_net.py", "__main__.py")) and len(sys.argv) > 1:
         a = parse_args()
         streamflow_config = a.streamflow_config
@@ -217,9 +224,9 @@ def main(
         num_stat_routing_features=dm.num_stat_routing_features,
         num_dynamic_features=dm.num_dyn_features,
         prediction_length=dm.prediction_length,
-        norm_args_stat_features=dm.norm_args_stat_features,   # HRU-scale input stats ✓
-        norm_args_dyn_features=dm.norm_args_dyn_features,     # HRU-scale input stats ✓
-        norm_args_targets=lumped_norm_args_targets,            # lumped LogXp → correct mm/day output ✓
+        norm_args_stat_features=dm.norm_args_stat_features,  # HRU-scale input stats ✓
+        norm_args_dyn_features=dm.norm_args_dyn_features,  # HRU-scale input stats ✓
+        norm_args_targets=lumped_norm_args_targets,  # lumped LogXp → correct mm/day output ✓
         norm_args_stat_routing_features=dm.norm_args_stat_routing_features,
         runoff_use_pretrained=True,
         use_instant_routing=True,  # bypass untrained routing weights

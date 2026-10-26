@@ -62,9 +62,7 @@ def get_encoding(ds: xr.Dataset) -> dict:
     for var in ds.data_vars:
         chunks = {}
         for dim in ds[var].dims:
-            if dim == "time":
-                chunks[dim] = 1000
-            elif dim == "hru":
+            if dim == "time" or dim == "hru":
                 chunks[dim] = 1000
             elif dim == "model":
                 chunks[dim] = 1

@@ -9,7 +9,7 @@ from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
 
 from project.data.downstream_aligner import DownstreamAligner
-from project.nn.models.base import TorchNormalizer
+from project.utils.torch.normalize import TorchNormalizer
 
 
 class TransportInstantSum(torch.nn.Module):
@@ -188,11 +188,10 @@ class TransportNet(torch.nn.Module):
 
         if (d is None) != (retention_prev is None):
             raise ValueError("Either both `d` and `retention_prev` must be provided or neither.")
-        else:
-            if (self.retention_mix_factor < 1.0) and (retention_prev is not None):
-                retention = retention * self.retention_mix_factor + retention_prev.unsqueeze(-1) * (
-                    1 - self.retention_mix_factor
-                )
+        if (self.retention_mix_factor < 1.0) and (retention_prev is not None):
+            retention = retention * self.retention_mix_factor + retention_prev.unsqueeze(-1) * (
+                1 - self.retention_mix_factor
+            )
 
         retention_down = downstream_aligner.to_downstream(x=retention)
 

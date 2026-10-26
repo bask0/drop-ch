@@ -1,3 +1,5 @@
+"""Plot the learning rate schedules of the runoff and routing optimizers over training (saves lr_schedule.png)."""
+
 import matplotlib.pyplot as plt
 import torch
 from torch.optim import AdamW
@@ -24,10 +26,15 @@ cycle_steps = min(cycle_epochs * steps_per_epoch, stepping_batches)
 freeze_steps = runoff_freeze_epochs * steps_per_epoch
 warmup_pct_start = min(warmup_epochs, cycle_epochs - 1) / cycle_epochs
 
+
 # ── Dummy optimizers ──────────────────────────────────────────────────────────
-p = lambda: [torch.nn.Parameter(torch.zeros(1))]
-runoff_optimizer = AdamW(p(), lr=runoff_lr)
-routing_optimizer = AdamW(p(), lr=routing_lr)
+def dummy_params() -> list[torch.nn.Parameter]:
+    """Return a single dummy parameter, so an optimizer can be created without a model."""
+    return [torch.nn.Parameter(torch.zeros(1))]
+
+
+runoff_optimizer = AdamW(dummy_params(), lr=runoff_lr)
+routing_optimizer = AdamW(dummy_params(), lr=routing_lr)
 
 # ── Routing: cosine → linear tail ─────────────────────────────────────────────
 remaining_routing = stepping_batches - cycle_steps

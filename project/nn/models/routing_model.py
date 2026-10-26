@@ -105,7 +105,7 @@ class RoutingModel(torch.nn.Module):
         _, D, _ = self.instant_tnet(batch)
 
         # Iterate time dimension.
-        for t in range(0, batch.y.shape[1]):
+        for t in range(batch.y.shape[1]):
             Qt = D @ q[:, t, :]
 
             Q_store[:, t, :] = Qt
@@ -189,7 +189,7 @@ class RoutingModel(torch.nn.Module):
             T, D, k, x_retention = self.tnet(x_enc=x_enc, downstream_aligner=downstream_aligner)
 
         # Iterate time dimension.
-        for t in range(0, seq_length):
+        for t in range(seq_length):
             # Scale inputs by number of sub-steps to conserve mass.
             qt = q[:, t, :] / self.num_time_subseteps
             et = e[:, t, :] / self.num_time_subseteps
@@ -259,9 +259,8 @@ class RoutingModel(torch.nn.Module):
 
         for name, param in self.tnet.named_parameters():
             experiment.add_histogram(name, param, self.current_epoch)
-            if param.requires_grad:
-                if param.grad is not None:
-                    experiment.add_histogram(name + ".grad", param.grad, self.current_epoch)
+            if param.requires_grad and param.grad is not None:
+                experiment.add_histogram(name + ".grad", param.grad, self.current_epoch)
 
     def log_loss(self, loss: dict[str, Tensor], batch: Batch, mode: Literal["train", "valid", "test"]) -> None:
         """Log loss values for a given batch and mode.
@@ -286,7 +285,7 @@ class RoutingModel(torch.nn.Module):
         self.log_dict(
             {f"{mode}_{k}": v for k, v in loss.items()},
             prog_bar=False,
-            on_step=True if mode == "train" else False,
+            on_step=mode == "train",
             on_epoch=True,
             batch_size=batch.batch_size if mode == "train" else batch.has_obs.sum().item(),  # type: ignore
         )

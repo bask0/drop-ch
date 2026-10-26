@@ -1,5 +1,4 @@
 # tests/test_config_resolution.py
-# -*- coding: utf-8 -*-
 """Fast, no-data/no-GPU checks that experiment configs resolve via CLI without errors.
 
 These tests exercise the same `${data_root}`/`${log_root}` interpolation (experiments/paths.yaml)
@@ -97,7 +96,7 @@ def _parse_via_default_config_files(config_files: list[str]) -> dict:
     return yaml.safe_load(buf.getvalue())
 
 
-@pytest.mark.parametrize("model,split", MODEL_SPLITS)
+@pytest.mark.parametrize(("model", "split"), MODEL_SPLITS)
 def test_config_chain_resolves_via_dash_c(model: str, split: str | None):
     """The tune.py/xval.py entry point: configs passed as `-c` arguments."""
 
@@ -108,7 +107,7 @@ def test_config_chain_resolves_via_dash_c(model: str, split: str | None):
     _assert_fully_resolved(cfg)
 
 
-@pytest.mark.parametrize("model,split", MODEL_SPLITS)
+@pytest.mark.parametrize(("model", "split"), MODEL_SPLITS)
 def test_config_chain_resolves_via_default_config_files(model: str, split: str | None):
     """The TuningEngine.objective per-trial CLI construction path."""
 

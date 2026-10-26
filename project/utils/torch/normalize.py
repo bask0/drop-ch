@@ -7,6 +7,8 @@ import torch
 import xarray as xr
 from torch import Tensor
 
+from project.utils.typing import HRUSample
+
 TensorLike = np.ndarray[int, np.dtype[np.float32]] | torch.Tensor | list[float]
 
 
@@ -81,8 +83,7 @@ class Normalizer(torch.nn.Module):
 
         if invert:
             return self.inverse_transform(x, is_batched=True)
-        else:
-            return self.transform(x, is_batched=True)
+        return self.transform(x, is_batched=True)
 
     def transform(self, x: Tensor, is_batched: bool = False) -> Tensor:
         """Normalize input x.
@@ -139,8 +140,7 @@ class Normalizer(torch.nn.Module):
         log_transform: bool = False,
         epsilon: float = 1e-5,
     ) -> dict[str, Any]:
-        """
-        Generate normalization keyword arguments for specified variables in an xarray Dataset.
+        """Generate normalization keyword arguments for specified variables in an xarray Dataset.
 
         Parameters
         ----------
@@ -156,7 +156,7 @@ class Normalizer(torch.nn.Module):
             taking the log of zero (log(x + epsilon)). Only applies if `log_transform=True`. Defaults to 1e-5.
 
 
-        Returns
+        Returns:
         -------
         dict[str, Any]
             A dictionary containing:
@@ -193,8 +193,7 @@ class Normalizer(torch.nn.Module):
         return args
 
     def _expand_stats_to_x(self, x: Tensor, is_batched: bool) -> tuple[Tensor, Tensor]:
-        """
-        Expand the stored mean and standard deviation tensors to match the shape of the input tensor `x`.
+        """Expand the stored mean and standard deviation tensors to match the shape of the input tensor `x`.
 
         Args:
             x (Tensor): The input tensor to be normalized or denormalized.
@@ -210,7 +209,7 @@ class Normalizer(torch.nn.Module):
         if is_batched:
             keep_dim = range(1, ndim)[self.dim]
         else:
-            keep_dim = range(0, ndim)[self.dim]
+            keep_dim = range(ndim)[self.dim]
 
         expand_args = tuple(... if d == keep_dim else None for d in range(ndim))
 
@@ -281,8 +280,7 @@ class RobustStandardizer(torch.nn.Module):
 
         if invert:
             return self.inverse_transform(x, is_batched=True)
-        else:
-            return self.transform(x, is_batched=True)
+        return self.transform(x, is_batched=True)
 
     def transform(self, x: Tensor, is_batched: bool = False) -> Tensor:
         """Standardize input x.
@@ -324,8 +322,7 @@ class RobustStandardizer(torch.nn.Module):
 
     @staticmethod
     def make_kwargs(ds: xr.Dataset, norm_variables: str | list[str], features_dim: int = -1) -> dict[str, Any]:
-        """
-        Generate keyword arguments for normalization based on the 95th percentile (q95) of specified variables.
+        """Generate keyword arguments for normalization based on the 95th percentile (q95) of specified variables.
 
         Args:
             ds (xr.Dataset): The input xarray Dataset containing the variables to normalize.
@@ -361,7 +358,7 @@ class RobustStandardizer(torch.nn.Module):
         """
 
         # Resolve negative `features_dim` against the unbatched dims, as in `Normalizer._expand_stats_to_x`.
-        dim = range(1, x.ndim)[self.dim] if is_batched else range(0, x.ndim)[self.dim]
+        dim = range(1, x.ndim)[self.dim] if is_batched else range(x.ndim)[self.dim]
         dims = tuple([slice(None, None) if d == dim else None for d in range(x.ndim)])
 
         q95s_expanded = self.q95s[dims]
@@ -439,8 +436,7 @@ class LogXp(torch.nn.Module):
 
         if invert:
             return self.inverse_transform(x, is_batched=True)
-        else:
-            return self.transform(x, is_batched=True)
+        return self.transform(x, is_batched=True)
 
     def transform(self, x: Tensor, is_batched: bool = False) -> Tensor:
         """Log-transfrom input x.
@@ -487,8 +483,7 @@ class LogXp(torch.nn.Module):
 
         if self.clip_zero:
             return torch.clamp(torch.exp(x_t) - self.epsilon, min=0.0)
-        else:
-            return torch.exp(x_t) - self.epsilon
+        return torch.exp(x_t) - self.epsilon
 
     def _expand_stats_to_x(self, x: Tensor, is_batched: bool) -> Tensor:
         """Expand (aka unsqueeze) stats to match input TensorLike shape.
@@ -501,7 +496,7 @@ class LogXp(torch.nn.Module):
             raise ValueError("Cannot expand means as no means were registered.")
 
         # Resolve negative `features_dim` against the unbatched dims, as in `Normalizer._expand_stats_to_x`.
-        dim = range(1, x.ndim)[self.dim] if is_batched else range(0, x.ndim)[self.dim]
+        dim = range(1, x.ndim)[self.dim] if is_batched else range(x.ndim)[self.dim]
         dims = tuple([slice(None, None) if d == dim else None for d in range(x.ndim)])
 
         means_expanded = self.means[dims]
@@ -517,8 +512,7 @@ class LogXp(torch.nn.Module):
         clip_zero: bool = False,
         features_dim: int = -1,
     ) -> dict[str, Any]:
-        """
-        Generate normalization keyword arguments for specified variables in an xarray Dataset.
+        """Generate normalization keyword arguments for specified variables in an xarray Dataset.
 
         Args:
             ds (xr.Dataset): The input xarray Dataset containing the variables to normalize.
@@ -632,8 +626,7 @@ class NoNormalizer(torch.nn.Module):
 
     @staticmethod
     def make_kwargs() -> dict[str, Any]:
-        """
-        Generate normalization keyword arguments for specified variables in an xarray Dataset.
+        """Generate normalization keyword arguments for specified variables in an xarray Dataset.
 
         Returns:
             dict[str, Any]: The arguments.
@@ -653,8 +646,7 @@ class DataTansform(torch.nn.Module):
     """Data transformation module."""
 
     def __init__(self, name: str, **kwargs):
-        """
-        Initialize the data transformation object based on provided keyword arguments.
+        """Initialize the data transformation object based on provided keyword arguments.
 
         Args:
             name (str): The name of the transformation, used for identification.
@@ -679,8 +671,7 @@ class DataTansform(torch.nn.Module):
             raise ValueError(f"No valid transformation found for name '{name}'.")
 
     def forward(self, x: Tensor, invert: bool = False) -> Tensor:
-        """
-        Apply the normalization or its inverse transformation to the input tensor.
+        """Apply the normalization or its inverse transformation to the input tensor.
 
         Args:
             x (Tensor): Input tensor to be transformed.
@@ -697,3 +688,89 @@ class DataTansform(torch.nn.Module):
         """Return a string representation of the DataTansform module."""
 
         return str(self.transform)
+
+
+class TorchNormalizer(torch.nn.Module):
+    """Bundle of the normalization transforms for each input group and the targets.
+
+    Each group without normalization arguments gets a no-op transform. Use:
+        - `norm_dyn_features(x)` for dynamic features.
+        - `norm_stat_features(x)` for static features.
+        - `norm_stat_routing_features(x)` for static routing features.
+        - `norm_targets(x)` for targets; pass `invert=True` to denormalize.
+
+    """
+
+    def __init__(
+        self,
+        norm_args_dyn_features: dict | None = None,
+        norm_args_stat_features: dict | None = None,
+        norm_args_stat_routing_features: dict | None = None,
+        norm_args_targets: dict | None = None,
+    ) -> None:
+        """Initialize the transforms from the normalization arguments computed by the data module.
+
+        Args:
+            norm_args_dyn_features: normalization arguments for dynamic features, defaults to None.
+            norm_args_stat_features: normalization arguments for static features, defaults to None.
+            norm_args_stat_routing_features: normalization arguments for static routing features, defaults to None.
+            norm_args_targets: normalization arguments for targets, defaults to None.
+        """
+
+        super().__init__()
+
+        if norm_args_dyn_features is not None:
+            self.norm_dyn_features = DataTansform(**norm_args_dyn_features)
+        else:
+            self.norm_dyn_features = NoNormalizer()
+
+        if norm_args_stat_features is not None:
+            self.norm_stat_features = DataTansform(**norm_args_stat_features)
+        else:
+            self.norm_stat_features = NoNormalizer()
+
+        if norm_args_stat_routing_features is not None:
+            self.norm_stat_routing_features = DataTansform(**norm_args_stat_routing_features)
+        else:
+            self.norm_stat_routing_features = NoNormalizer()
+
+        if norm_args_targets is not None:
+            self.norm_targets = DataTansform(**norm_args_targets)
+        else:
+            self.norm_targets = NoNormalizer()
+
+    def normalize_inputs(self, batch: HRUSample) -> HRUSample:
+        """Normalize the input data in the batch.
+
+        Parameters
+        ----------
+        batch : HRUSample
+            Input batch containing time series, static features, and targets.
+
+        Returns:
+        -------
+        HRUSample
+            Normalized batch with transformed features.
+        """
+
+        batch.x = self.norm_stat_features(batch.x)
+        batch.x_routing = None if batch.x_routing is None else self.norm_stat_routing_features(batch.x_routing)
+        batch.d = self.norm_dyn_features(batch.d)
+        return batch
+
+    def normalize_targets(self, batch: HRUSample) -> HRUSample:
+        """Normalize the target data in the batch.
+
+        Parameters
+        ----------
+        batch : HRUSample
+            Input batch containing targets.
+
+        Returns:
+        -------
+        HRUSample
+            Batch with normalized targets.
+        """
+
+        batch.y = self.norm_targets(batch.y)
+        return batch

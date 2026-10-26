@@ -48,7 +48,7 @@ def despine(ax: Axes, which: str = "L", remove_ticks: bool = False) -> None:
     elif which == "L":
         spines = ["top", "right"]
     else:
-        NotImplementedError(f"`which`={which} not implemented.")
+        raise NotImplementedError(f"`which`={which} not implemented.")
 
     ax.spines[spines].set_visible(False)
 
@@ -174,7 +174,7 @@ def plot_optuna_summary(study_path: str | PathLike, study_name: str | None = Non
 def _get_cdf(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, float]:
     da = da.load()
     da = da.where(da.notnull(), drop=True)
-    bins = list(sorted(da.values)) + [np.inf]
+    bins = [*sorted(da.values), np.inf]
     count, bins = np.histogram(da, bins=bins)
     bins = bins[:-1]
     pdf = count / sum(count)

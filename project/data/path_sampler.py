@@ -1,12 +1,13 @@
 """Path sampling class to sample random downstream paths from random nodes."""
 
 from typing import cast
+
 import torch
 from torch import Tensor
 from torch_geometric.data import Batch
 
 
-class PathSampler(object):
+class PathSampler:
     """PathSampler class to sample paths in a graph based on k-hop neighborhoods."""
 
     def __init__(self, num_samples_per_graph: int) -> None:
@@ -93,7 +94,7 @@ class PathSampler(object):
             return torch.arange(num_nodes, device=device)
 
         for b in range(batch.batch_size):
-            sample_nodes = torch.tensor([i for i in torch.argwhere(batch_id == b)])
+            sample_nodes = torch.tensor(list(torch.argwhere(batch_id == b)))
             random_indices = torch.unique(torch.randint(high=len(sample_nodes), size=(self.num_samples_per_graph,)))
             random_nodes.append(sample_nodes[random_indices])
 

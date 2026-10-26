@@ -101,84 +101,45 @@ python = ".pixi/envs/default"
 
 [tool.ruff]
 line-length = 120
-lint.extend-select = [
-    "E",    # Pycodestyle errors (style issues)
-    "W",    # Pycodestyle warnings (style issues)
-    "C90",  # McCabe - complexity metric for functions
-    "I",    # isort - import ordering checks
-    "N",    # PEP8 Naming - naming conventions
-    "D",    # Pydocstyle - docstring formatting
-    "UP",   # Pyupgrade - upgrades syntax to newer Python versions
-    "YTT",  # Flake8-2020 - checks for misuse of sys.version and sys.version_info
-    # "ANN",  # Flake8-annotations - enforces type annotation style
-    "ASYNC",# Flake8-async - checks async/await usage
-    "S",    # Flake8-bandit - security issues
-    "BLE",  # Flake8-blind-except - flags bare excepts
-    "FBT",  # Flake8-boolean-trap - potential pitfalls with booleans
-    "B",    # Flake8-bugbear - common bug patterns
-    "A",    # Flake8-builtins - misuse of Python built-in names
-    "COM",  # Flake8-commas - trailing/comma issues
-    # "CPY",  # Flake8-copyright - copyright header checks
-    "C4",   # Flake8-comprehensions - best practices in comprehensions
-    "DTZ",  # Flake8-datetimez - requires timezone-aware datetime objects
-    "T10",  # Flake8-debugger - debugger statements (e.g. pdb)
-    "DJ",   # Flake8-django - Django-specific conventions
-    "EM",   # Flake8-errmsg - error message style
-    "EXE",  # Flake8-executable - executable file checks
-    "FA",   # Flake8-future-annotations - future import for annotations
-    "ISC",  # Flake8-implicit-str-concat - warns on implicit string concatenation
-    "ICN",  # Flake8-import-conventions - enforces conventional import aliases
-    "LOG",  # Flake8-logging - proper logging usage
-    "G",    # Flake8-logging-format - logging format string issues
-    "INP",  # Flake8-no-pep420 - requires __init__.py files (no implicit namespace packages)
-    "PIE",  # Flake8-pie - Python improvement suggestions
-    # "T20",  # Flake8-print - disallows print statements
-    "PYI",  # Flake8-pyi - checks for type stub (.pyi) consistency
-    "PT",   # Flake8-pytest-style - pytest best practices
-    "Q",    # Flake8-quotes - enforces quote style consistency
-    "RSE",  # Flake8-raise - proper raise statement usage
-    "RET",  # Flake8-return - return statement issues
-    "SLF",  # Flake8-self - flags instance methods that don't use self
-    "SLOT", # Flake8-slots - suggests use of __slots__ where appropriate
-    "SIM",  # Flake8-simplify - code simplification hints
-    "TID",  # Flake8-tidy-imports - enforces specific import styles (e.g., no relative imports)
-    "TC",   # Flake8-type-checking - proper import of typing in type checks
-    "INT",  # Flake8-gettext - checks for proper internationalization usage
-    "ARG",  # Flake8-unused-arguments - flags unused function arguments
-    "PTH",  # Flake8-use-pathlib - encourages pathlib over os.path
-    "TD",   # Flake8-todos - flags TODO comments
-    "FIX",  # Flake8-fixme - flags FIXME comments
-    # "ERA",  # Eradicate - detects commented-out code (potentially dangerous)
-    "PD",   # Pandas-vet - checks pandas-specific code practices
-    "PGH",  # Pygrep-hooks - custom grep hooks for linting
-    "PL",   # Pylint - integration with Pylint conventions
-    "TRY",  # Tryceratops - try/except usage suggestions
-    "FLY",  # Flynt - f-string conversion suggestions
-    "NPY",  # NumPy-specific rules - ensures NumPy coding standards
-    "FAST", # FastAPI - FastAPI-specific linting rules
-    "AIR",  # Airflow - Airflow-specific linting rules
-    "PERF", # Perflint - performance-related checks
-    "FURB", # Refurb - rules for code refurbishment
-    # "DOC",  # Pydoclint - docstring linting and consistency
-    "RUF",  # Ruff-specific rules - additional Ruff checks
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+extend-select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie
+    "PT",   # flake8-pytest-style
+    "RET",  # flake8-return
+    "SIM",  # flake8-simplify
+    "NPY",  # NumPy-specific rules
+    "RUF",  # Ruff-specific rules
+]
+ignore = [
+    "N803",    # Argument name should be lowercase: matrices/physical quantities (A, Q, T) keep their math names.
+    "N806",    # Variable in function should be lowercase: same as above.
+    "D104",    # Missing docstring in public package: the __init__.py files are empty.
+    "D105",    # Missing docstring in magic method.
+    "D107",    # Missing docstring in __init__: documented on the class instead.
+    "D202",    # No blank lines allowed after function docstring: house style is one blank line.
+    "RET504",  # Unnecessary assignment before return: named results read better.
+    "SIM108",  # Use ternary operator: explicit if/else is often clearer.
+    "C408",    # Unnecessary dict() call: dict(key=...) is used deliberately for keyword-style mappings.
+    "RUF001",  # Ambiguous unicode character in string: units such as m³ and °C are intended.
+    "RUF002",  # Ambiguous unicode character in docstring: same as above.
+    "RUF003",  # Ambiguous unicode character in comment: same as above.
 ]
 
-lint.ignore = [
-    "FBT001",  # Flake8-boolean-trap - Use of boolean positional arguments in function definitions
-    "FBT002",  # Flake8-boolean-trap - Boolean default positional argument in function definition
-    "FBT003",  # Flake8-boolean-trap - Boolean position value in function call
-    "D401",    # Pydocstyle - Docstring first lines that are not in an imperative mood
-    "S311",    # Flake8-bandit - Standard pseudo-random generators are not suitable for security/cryptographic purposes
-    "S605",    # Flake8-bandit - Calls that start a process with a shell
-    "PERF401", # Perflint - For loops that can be replaced by a list comprehension.
-    "RET504",  # Flake8-return - Variable assignments that immediately precede a return of the assigned variable.
-    "PLR0913", # Pylint: Function definitions that include too many arguments.
-    "FA102",   # Flake8-future-annotations - Missing `from __future__ import annotations`, but uses PEP 604 union
-    "TRY003",  # Tryceratops - Long exception messages that are not defined in the exception class itself
-    "EM101",   # Flake8-errmsg - Use of string literals in exception constructors
-    "TC002",   # Flake8-type-checking - Usage of typing imports outside of TYPE_CHECKING blocks
-    "TC003",   # Flake8-type-checking - Imports from typing that are not within TYPE_CHECKING blocks
-    "COM812",  # Flake8-commas - Absence of trailing commas
-    "N806",    # PEP8 Naming - Variable in function should be lowercase
-    "N803",    # PEP8 Naming - Argument should be lowercase
-]
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D100", "D103", "D104"]
+# Loss modules keep torch.nn's `forward(input, target)` signature.
+"project/utils/torch/loss.py" = ["A002"]

@@ -29,7 +29,7 @@ class EvaporationModel(torch.nn.Module):
 
         self.disable = disable
         self.return_m3s = return_m3s
-        self.alpha = torch.nn.Parameter(torch.log(torch.tensor((4.0))))  # Leads to 4mm/d at 20C
+        self.alpha = torch.nn.Parameter(torch.log(torch.tensor(4.0)))  # Leads to 4mm/d at 20C
         self.beta = torch.nn.Parameter(torch.tensor(1.5))
 
     def forward(self, T: Tensor, area: Tensor, water_freq: Tensor, subset: Tensor | None) -> Tensor:
