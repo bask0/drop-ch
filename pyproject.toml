@@ -1,9 +1,13 @@
 [project]
-authors = [{name = "bask0", email = "29065166+bask0@users.noreply.github.com"}]
+authors = [{name = "Basil Kraft", email = "29065166+bask0@users.noreply.github.com"}]
 dependencies = []
+description = "DROP: a neural network for modeling and routing streamflow over a river network (research code)."
+license = "MIT"
+license-files = ["LICENSE"]
 name = "drop"
+readme = "README.md"
 requires-python = ">= 3.11"
-version = "0.3.0"
+version = "1.0.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["project"]

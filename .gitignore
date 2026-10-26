@@ -73,7 +73,7 @@ desktop.ini
 .coverage
 htmlcov/
 .cache/
-pytest_cache/
+.pytest_cache/
 
 # === Build artifacts ===
 build/
