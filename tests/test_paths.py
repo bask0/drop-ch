@@ -1,5 +1,6 @@
 """Tests that machine-specific paths are configured only in experiments/paths.yaml."""
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -50,16 +51,26 @@ def test_unknown_key_raises():
 
 
 def _tracked_files() -> list[Path]:
-    """Tracked Python, shell and YAML files; notebooks are excluded."""
+    """Tracked Python, shell, YAML and notebook files."""
 
     out = subprocess.run(
-        ["git", "ls-files", "*.py", "*.sh", "*.yaml", "*.yml"],
+        ["git", "ls-files", "*.py", "*.sh", "*.yaml", "*.yml", "*.ipynb"],
         capture_output=True,
         text=True,
         check=True,
         cwd=REPO_ROOT,
     ).stdout
     return [REPO_ROOT / f for f in out.split()]
+
+
+def _source_lines(file: Path) -> list[str]:
+    """Lines of a source file; for notebooks, the code cell sources (saved outputs are not checked)."""
+
+    if file.suffix != ".ipynb":
+        return file.read_text().splitlines()
+
+    cells = json.loads(file.read_text())["cells"]
+    return [line for cell in cells if cell["cell_type"] == "code" for line in cell["source"]]
 
 
 def test_no_machine_specific_paths_outside_paths_config():
@@ -69,7 +80,7 @@ def test_no_machine_specific_paths_outside_paths_config():
         f"{file.relative_to(REPO_ROOT)}:{lineno}: {line.strip()}"
         for file in _tracked_files()
         if file not in (PATHS_CONFIG, PATHS_TEMPLATE, Path(__file__).resolve())
-        for lineno, line in enumerate(file.read_text().splitlines(), start=1)
+        for lineno, line in enumerate(_source_lines(file), start=1)
         if MACHINE_PATH.search(line)
     ]
 

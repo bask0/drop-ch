@@ -30,7 +30,7 @@ Designed to capture spatial and temporal dynamics of runoff generation and flow 
 │   └── {instant,lumped,prevah,routed}/
 │       ├── config.yaml           # Model-specific config
 │       └── {easy,hard,random}/config.yaml  # Split-specific overrides
-├── slurm/                        # SLURM job scripts (written for a Slurm + pixi cluster setup)
+├── slurm/                        # SLURM job scripts; cluster.example.sh is the template for your cluster.sh
 ├── tests/                        # Pytest suite
 ├── tune.py                       # Entry point: hyperparameter tuning
 ├── xval.py                       # Entry point: cross-validation
@@ -66,6 +66,16 @@ hru_file: /path/to/hrus.gpkg      # HRU polygons, used for plotting
 
 Experiment configs derive their paths from it via `${data_root}`/`${log_root}` interpolation; scripts, plotting and notebooks read it through `project/utils/paths.py`. The remaining keys are only needed to rebuild the dataset from raw data (`project/scripts/download_data.py`, `project/scripts/preprocessing.py`) or for the analysis notebooks.
 
+### SLURM
+
+The cluster-specific SLURM settings (account, GPU type, modules) live in `slurm/cluster.sh`, which is not tracked by git either. Create it from the template:
+
+```bash
+cp slurm/cluster.example.sh slurm/cluster.sh
+```
+
+All scripts load it automatically. Run them with `bash` from the repository root; the job scripts in `slurm/` submit themselves.
+
 ## Usage
 
 Run hyperparameter tuning:
@@ -82,7 +92,7 @@ pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yam
 
 where `<model>` is one of `instant`, `lumped`, `prevah`, `routed` and `<split>` is one of `easy`, `hard`, `random`.
 
-On a SLURM cluster, `run_all.sh` submits the full tune+xval job graph across all experiments and splits (adjust `slurm/*.sh` for your cluster's account/module setup first). To sanity-check your setup with a single fast, low-resource job before committing to the full run:
+On a SLURM cluster, `bash run_all.sh` submits the full tune+xval job graph across all experiments and splits (see [SLURM](#slurm) for the one-time setup). To sanity-check your setup with a single fast, low-resource job before committing to the full run:
 
 ```bash
 bash slurm/example_minimal.sh
