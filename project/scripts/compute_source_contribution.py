@@ -1,15 +1,16 @@
 """Compute gradients of streamflow at a given outlet with respect to runoff at all HRUs."""
 
-from argparse import ArgumentParser
 import logging
 import math
+from argparse import ArgumentParser
 from pathlib import Path
+
 import numpy as np
 import optuna
 import torch
-from tqdm import tqdm
 import xarray as xr
 import yaml
+from tqdm import tqdm
 from zarr.codecs import BloscCodec, BloscShuffle
 
 from project.data.datamodule import GraphDataModule
@@ -89,7 +90,7 @@ def main(args) -> None:
     snet = StreamflowNet.load_from_checkpoint(checkpoint_path, map_location=device)
     snet.eval()
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     data_config = config["data"]["init_args"]

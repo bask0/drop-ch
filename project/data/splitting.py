@@ -1,5 +1,4 @@
-"""
-This module provides utilities for generating reproducible dataset splits for hydrologic modeling workflows.
+"""This module provides utilities for generating reproducible dataset splits for hydrologic modeling workflows.
 
 It contains two primary classes:
 
@@ -19,7 +18,7 @@ Features
 - Input validation to ensure splits are meaningful and reproducible.
 - Compatible with numpy, xarray, and standard Python typing.
 
-Example
+Example:
 -------
 >>> from project.data.splitting import CatchmentSplitter, HRUSplitter
 >>> train_c, valid_c, test_c, is_random = CatchmentSplitter("hard").compute()
@@ -29,7 +28,7 @@ Example
 >>> splitter = HRUSplitter(ds, split=[0.7, 0.2, 0.1], seed=42)
 >>> all_hrus, train_hrus, valid_hrus, test_hrus = splitter.compute()
 
-Notes
+Notes:
 -----
 - Catchment IDs and names are hardcoded for reproducibility; see UNIQUE_CATCHMENTS
   and SUPER_CATCHMENTS constants for details.
@@ -38,7 +37,8 @@ Notes
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Literal
+
 import numpy as np
 import xarray as xr
 
@@ -79,10 +79,9 @@ SUPER_CATCHMENTS = dict(
 # -------------------------------------------------------------------
 @dataclass(frozen=True)
 class CatchmentSplitter:
-    """
-    Utility class to generate predefined catchment splits.
+    """Utility class to generate predefined catchment splits.
 
-    Attributes
+    Attributes:
     ----------
     mode : Literal["easy", "hard", "random"], default="easy"
         Type of split to generate:
@@ -90,7 +89,7 @@ class CatchmentSplitter:
         - "hard": Harder test set, fixed assignments.
         - "random": All catchments in each set, indicating a random split.
 
-    Methods
+    Methods:
     -------
     compute() -> tuple[dict, dict, dict, bool]
         Returns the train, validation, and test catchment dictionaries,
@@ -101,11 +100,10 @@ class CatchmentSplitter:
 
     def compute(
         self,
-    ) -> Tuple[Dict[str, int], Dict[str, int], Dict[str, int], bool]:
-        """
-        Compute the catchment split.
+    ) -> tuple[dict[str, int], dict[str, int], dict[str, int], bool]:
+        """Compute the catchment split.
 
-        Returns
+        Returns:
         -------
         tuple
             (train_catchments, valid_catchments, test_catchments, random_catchments)
@@ -163,10 +161,9 @@ class CatchmentSplitter:
 # -------------------------------------------------------------------
 @dataclass
 class HRUSplitter:
-    """
-    Utility class to split HRUs (Hydrologic Response Units) from an xarray Dataset.
+    """Utility class to split HRUs (Hydrologic Response Units) from an xarray Dataset.
 
-    Attributes
+    Attributes:
     ----------
     ds : xr.Dataset
         Input dataset containing an 'hru' coordinate or dimension.
@@ -176,7 +173,7 @@ class HRUSplitter:
     seed : int, default=21
         Random seed for reproducibility.
 
-    Methods
+    Methods:
     -------
     compute() -> tuple[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]
         Returns arrays for all HRUs, train HRUs, valid HRUs, and test HRUs.
@@ -184,7 +181,7 @@ class HRUSplitter:
     """
 
     ds: xr.Dataset
-    split: Optional[List[float]] = None
+    split: list[float] | None = None
     seed: int = 21
     _rng: np.random.RandomState = field(init=False, repr=False)
 
@@ -204,11 +201,10 @@ class HRUSplitter:
 
     def compute(
         self,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
-        """
-        Split the HRUs into train, validation, and test sets.
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
+        """Split the HRUs into train, validation, and test sets.
 
-        Returns
+        Returns:
         -------
         tuple
             - all_hrus : np.ndarray

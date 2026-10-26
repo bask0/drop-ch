@@ -1,13 +1,14 @@
 """DownstreamAligner class to handle reshaping between sparse adjacency and dense downstream layout."""
 
 from typing import cast
+
 import torch
 from torch import Tensor
 from torch_geometric.data import Batch
 from torch_sparse import SparseTensor
 
 
-class DownstreamAligner(object):
+class DownstreamAligner:
     """DownstreamAligner class to handle reshaping between sparse adjacency and dense downstream layout.
 
     A utility class to align node feature data based on k-hop neighborhoods.
@@ -109,8 +110,7 @@ class DownstreamAligner(object):
         """
         if self.subset is None:
             return x
-        else:
-            return x[self.subset]
+        return x[self.subset]
 
     def mask_e(self, e: Tensor) -> Tensor:
         """Is Placeholder for masking edge-specific data. Not implemented.

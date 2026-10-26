@@ -1,12 +1,13 @@
 """Path sampling class to sample random downstream paths from random nodes."""
 
 from typing import cast
+
 import torch
 from torch import Tensor
 from torch_geometric.data import Batch
 
 
-class PathSampler(object):
+class PathSampler:
     """PathSampler class to sample paths in a graph based on k-hop neighborhoods."""
 
     def __init__(self, num_samples_per_graph: int) -> None:

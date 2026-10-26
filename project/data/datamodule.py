@@ -1,8 +1,9 @@
 """Data module for handling HRU data in PyTorch Geometric format."""
 
 import warnings
+from collections.abc import Callable
 from dataclasses import fields, is_dataclass
-from typing import Callable, Literal
+from typing import Literal
 
 import lightning.pytorch as pl
 import numpy as np
@@ -24,8 +25,7 @@ dask_config.set(scheduler="single-threaded")
 
 
 def suppress_sparse_csc_warning(idx: int):
-    """
-    Suppresses the 'Sparse CSC tensor support is in beta state' UserWarning.
+    """Suppresses the 'Sparse CSC tensor support is in beta state' UserWarning.
 
     This function configures the warnings filter to ignore a specific UserWarning
     related to sparse CSC tensor support. It is useful when working with code that
@@ -44,8 +44,7 @@ class DataCheckError(Exception):
     """Exception raised for errors encountered during data validation or checking processes."""
 
     def __init__(self, message):
-        """
-        Initialize the instance with a message.
+        """Initialize the instance with a message.
 
         Args:
             message (str): The message to be stored in the instance.
@@ -54,8 +53,7 @@ class DataCheckError(Exception):
 
 
 def collate_dataclass(batch):
-    """
-    Collates a batch of dataclass instances into a single batched dataclass.
+    """Collates a batch of dataclass instances into a single batched dataclass.
 
     This function recursively collates fields of dataclass objects in a batch,
     handling nested dataclasses and using the default_collate function for non-dataclass fields.
@@ -106,8 +104,7 @@ class HRUData(InMemoryDataset):
         aggregate_catchments: bool = False,
         transform: None | Callable = None,
     ):
-        """
-        Initialize HRUData class.
+        """Initialize HRUData class.
 
         Args:
             ds (xr.Dataset): xarray dataset containing the data.
@@ -216,8 +213,7 @@ class HRUData(InMemoryDataset):
         return len(self.sample_hrus)
 
     def get(self, idx: int) -> Data | HRUSample:
-        """
-        Retrieve a single sample from the dataset by index.
+        """Retrieve a single sample from the dataset by index.
 
         Depending on the dataset configuration, this method returns either an aggregated catchment sample,
         a single HRU sample, or a graph-based sample. The returned object type is determined by the
@@ -240,14 +236,12 @@ class HRUData(InMemoryDataset):
 
         if self.aggregate_catchments:
             return self.get_catchment(idx=idx)
-        elif self.use_prevah:
+        if self.use_prevah:
             return self.get_hru(idx=idx)
-        else:
-            return self.get_graph(idx=idx)
+        return self.get_graph(idx=idx)
 
     def get_catchment(self, idx: int) -> HRUSample:
-        """
-        Extract and aggregates features for a specific catchment (Hydrologic Response Unit, HRU) by index.
+        """Extract and aggregates features for a specific catchment (Hydrologic Response Unit, HRU) by index.
 
         This method selects the HRU at the given index, constructs its subgraph, aggregates static and dynamic features
         weighted by HRU area, and retrieves observed discharge and other relevant attributes. The resulting data is
@@ -318,8 +312,7 @@ class HRUData(InMemoryDataset):
         )
 
     def get_hru(self, idx: int) -> HRUSample:
-        """
-        Retrieve and prepare relevant features and target variables for a single Hydrologic Response Unit (HRU) sample.
+        """Retrieve and prepare relevant features and target variables for a single Hydrologic Response Unit (HRU) sample.
 
         Args:
             idx (int): Index of the HRU sample to retrieve.
@@ -387,8 +380,7 @@ class HRUData(InMemoryDataset):
         )
 
     def get_graph(self, idx: int) -> Data:
-        """
-        Construct and return a PyTorch Geometric Data object representing a subgraph for a given catchment index.
+        """Construct and return a PyTorch Geometric Data object representing a subgraph for a given catchment index.
 
         The method extracts a k-hop subgraph around the selected HRU, gathers static and dynamic features,
         observational and emulated discharge data, meteorological variables, and various HRU attributes. It also
@@ -493,8 +485,7 @@ class HRUData(InMemoryDataset):
         return data
 
     def get_time_slice(self, target: Tensor) -> slice:
-        """
-        Return a slice object representing a valid time window for model input.
+        """Return a slice object representing a valid time window for model input.
 
         If `self.temporal_context_length` is set (not -1), the method searches for timesteps in the `target` tensor
         where observations are available (i.e., not NaN). It then filters these timesteps to ensure that a full
@@ -533,9 +524,8 @@ class HRUData(InMemoryDataset):
 
             return time_slice
 
-        else:
-            # If context length is not set, return the full time range
-            return slice(0, target.shape[-2])
+        # If context length is not set, return the full time range
+        return slice(0, target.shape[-2])
 
     @staticmethod
     def create_adjacency(edge_index: Tensor, num_nodes: int) -> SparseTensor:
@@ -557,8 +547,7 @@ class HRUData(InMemoryDataset):
 
     @staticmethod
     def create_k_adjacency(A: SparseTensor, k_hops: int) -> SparseTensor:
-        """
-        Create a k-hop adjacency matrix from a given sparse adjacency matrix.
+        """Create a k-hop adjacency matrix from a given sparse adjacency matrix.
 
         This method computes the k-hop neighborhood connectivity for each node in a graph,
         where the input adjacency matrix `A` represents direct connections (edges) between nodes.
@@ -589,17 +578,16 @@ class HRUData(InMemoryDataset):
         Ak = A0
         Ai = A
 
-        Ak = A0 + A  # type: ignore # noqa
+        Ak = A0 + A  # type: ignore
 
         for _ in range(1, k_hops + 1):
-            Ai = Ai @ A  # type: ignore # noqa
+            Ai = Ai @ A  # type: ignore
             Ak = Ak + Ai
 
         return Ak
 
     def get_dist(self, row: Tensor, col: Tensor, subset: Tensor | None = None) -> Tensor:
-        """
-        Compute the Euclidean distance between pairs of coordinates specified by `row` and `col` indices.
+        """Compute the Euclidean distance between pairs of coordinates specified by `row` and `col` indices.
 
         Args:
             row (Tensor): Tensor of indices representing the first set of coordinates.
@@ -628,8 +616,7 @@ class HRUData(InMemoryDataset):
         return dist
 
     def get_cumul_dist(self, row: Tensor, col: Tensor, k: Tensor, subset: Tensor):
-        """
-        Compute the cumulative Euclidean distance along paths for given row, col, and k tensors for a subset of nodes.
+        """Compute the cumulative Euclidean distance along paths for given row, col, and k tensors for a subset of nodes.
 
         Args:
             row (Tensor): Tensor containing source node indices for each edge.
@@ -654,7 +641,7 @@ class HRUData(InMemoryDataset):
 
         dist_cumul = torch.zeros(num_nodes)
 
-        for k_ in range(0, k.max() + 1):
+        for k_ in range(k.max() + 1):
             row_ = row[k == k_]
             col_ = col[k == k_]
 
@@ -677,8 +664,7 @@ class HRUData(InMemoryDataset):
         return dist
 
     def adj2downstream(self, edge_index: Tensor, k_hops: int, num_nodes: int) -> tuple[Tensor, Tensor, Tensor]:
-        """
-        Compute the k-hop downstream adjacency for a graph.
+        """Compute the k-hop downstream adjacency for a graph.
 
         Args:
             edge_index (Tensor): Edge index of the graph (2, num_edges).
@@ -713,7 +699,7 @@ class HRUData(InMemoryDataset):
             col_list.append(col)
             k_list.append(torch.full_like(row, fill_value=k, device=edge_index.device))
 
-            Ak = Ak @ A.t()  # type: ignore # noqa
+            Ak = Ak @ A.t()  # type: ignore
 
         row = torch.concat(row_list)
         col = torch.concat(col_list)
@@ -722,8 +708,7 @@ class HRUData(InMemoryDataset):
         return row, col, k
 
     def hru2hru_i(self, hru: list[int] | Tensor | np.ndarray) -> list[int]:
-        """
-        Convert HRU identifiers to their corresponding integer indices (hru_i).
+        """Convert HRU identifiers to their corresponding integer indices (hru_i).
 
         Args:
             hru (list[int] | Tensor | np.ndarray): HRU identifiers.
@@ -735,8 +720,7 @@ class HRUData(InMemoryDataset):
         return self.ds.hru_i.sel(hru=hru).values.tolist()
 
     def hru_i2hru(self, hru_i: list[int] | Tensor | np.ndarray) -> list[int]:
-        """
-        Convert integer HRU indices (hru_i) back to HRU identifiers.
+        """Convert integer HRU indices (hru_i) back to HRU identifiers.
 
         Args:
             hru_i (list[int] | Tensor | np.ndarray): HRU indices.
@@ -748,8 +732,7 @@ class HRUData(InMemoryDataset):
         return self.ds.hru.values[hru_i].tolist()
 
     def get_q_obs(self, **isel) -> Tensor | None:
-        """
-        Retrieve observed streamflow (Q_obs_m3s) from the dataset for the given selection.
+        """Retrieve observed streamflow (Q_obs_m3s) from the dataset for the given selection.
 
         Args:
             **isel: Index selection arguments for xarray.
@@ -763,8 +746,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_q_emulated(self, **isel) -> Tensor | None:
-        """
-        Retrieve emulated streamflow (Q_emulated) for the given selection.
+        """Retrieve emulated streamflow (Q_emulated) for the given selection.
 
         Args:
             **isel: Index selection arguments for xarray.
@@ -778,8 +760,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_q_prevah(self, **isel) -> Tensor | None:
-        """
-        Retrieve PREVAH-modeled streamflow (q_prevah_mmd) for the given selection.
+        """Retrieve PREVAH-modeled streamflow (q_prevah_mmd) for the given selection.
 
         Args:
             **isel: Index selection arguments for xarray.
@@ -793,8 +774,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_stat_features(self, **isel) -> Tensor | None:
-        """
-        Get standardized static features for selected HRUs.
+        """Get standardized static features for selected HRUs.
 
         Args:
             **isel: Index selection for HRUs.
@@ -808,8 +788,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_stat_routing_features(self, **isel) -> Tensor | None:
-        """
-        Retrieve static routing features for selected HRUs.
+        """Retrieve static routing features for selected HRUs.
 
         Args:
             **isel: Index selection for HRUs.
@@ -826,8 +805,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_stat_edge_features(self, **isel) -> Tensor | None:
-        """
-        Retrieve static edge features (if defined) for selected HRUs.
+        """Retrieve static edge features (if defined) for selected HRUs.
 
         Args:
             **isel: Index selection.
@@ -846,8 +824,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "variable").astype("float32"))
 
     def get_dyn_features(self, **isel) -> Tensor | None:
-        """
-        Retrieve dynamic (temporal) features for selected HRUs.
+        """Retrieve dynamic (temporal) features for selected HRUs.
 
         Args:
             **isel: Index selection for HRUs.
@@ -861,8 +838,7 @@ class HRUData(InMemoryDataset):
         return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
     def get_coords(self, **isel) -> xr.DataArray:
-        """
-        Get x and y spatial coordinates for the selected HRUs.
+        """Get x and y spatial coordinates for the selected HRUs.
 
         Args:
             **isel: Index selection arguments.
@@ -875,8 +851,7 @@ class HRUData(InMemoryDataset):
         return xy.to_array("variable").transpose(..., "variable")
 
     def get_ds_feature(self, feature: str | list[str], **isel) -> Tensor | None:
-        """
-        Retrieve a feature or list of features from the dataset.
+        """Retrieve a feature or list of features from the dataset.
 
         Args:
             feature (str | list[str]): Feature name(s).
@@ -888,18 +863,13 @@ class HRUData(InMemoryDataset):
 
         if isinstance(feature, str):
             return self.darray2tensor(self.ds[feature].isel(**isel).transpose(..., "time", missing_dims="ignore"))
-        else:
-            return self.darray2tensor(
-                self.ds[feature]
-                .isel(**isel)
-                .to_array("variable")
-                .transpose(..., "time", "variable", missing_dims="ignore")
-            )
+        return self.darray2tensor(
+            self.ds[feature].isel(**isel).to_array("variable").transpose(..., "time", "variable", missing_dims="ignore")
+        )
 
     @staticmethod
     def darray2tensor(x: xr.DataArray | None) -> Tensor | None:
-        """
-        Convert xarray DataArray to PyTorch tensor.
+        """Convert xarray DataArray to PyTorch tensor.
 
         Args:
             x (xr.DataArray | None): Input data array.
@@ -914,8 +884,7 @@ class HRUData(InMemoryDataset):
         return torch.tensor(x.values)
 
     def _check_variables(self, ds: xr.Dataset, variables: list[str], expected_dims: set[str]) -> None:
-        """
-        Check that all given variables exist in the dataset and have the expected dimensions.
+        """Check that all given variables exist in the dataset and have the expected dimensions.
 
         Args:
             ds (xr.Dataset): Dataset to validate.
@@ -947,8 +916,7 @@ class HRUData(InMemoryDataset):
             raise DataCheckError(f"variables do not have expected dimensions {(*expected_dims,)}:{s}")
 
     def get_sample_indices(self, batch) -> Tensor:
-        """
-        Compute sample indices from a batch object by combining node mappings and batch pointers.
+        """Compute sample indices from a batch object by combining node mappings and batch pointers.
 
         Args:
             batch: A PyG batch object with `mapping` and `ptr` attributes.
@@ -960,8 +928,7 @@ class HRUData(InMemoryDataset):
         return batch.mapping + batch.ptr[:-1]
 
     def get_upstream_samples(self, hru_i: int) -> list[int]:
-        """
-        Retrieve all upstream HRU indices for a given HRU index.
+        """Retrieve all upstream HRU indices for a given HRU index.
 
         This method uses the k-hop subgraph to gather all HRUs connected upstream
         of the specified HRU index, up to a large hop count (effectively full traversal).
@@ -1039,8 +1006,7 @@ class HRUData(InMemoryDataset):
 
 
 class GraphDataModule(pl.LightningDataModule):
-    """
-    Torch Lightning DataModule for graph-based hydrological response unit (HRU) modeling using PyTorch Geometric.
+    """Torch Lightning DataModule for graph-based hydrological response unit (HRU) modeling using PyTorch Geometric.
 
     This module prepares graph-structured data from an xarray-based dataset representing HRU-level catchment data.
     It automates the process of subsetting, graph construction (via k-hop subgraphs), normalization, and batch
@@ -1105,8 +1071,7 @@ class GraphDataModule(pl.LightningDataModule):
         val_time_range: list[str] | None = None,
         skip_data_init: bool = False,
     ) -> None:
-        """
-        Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
+        """Initialize the data module for streamflow network datasets and subgraphs for training, validation, and testing.
 
         Args:
             data_path (str): Path to the dataset directory.
@@ -1265,8 +1230,7 @@ class GraphDataModule(pl.LightningDataModule):
             self.norm_args_targets = NoNormalizer.make_kwargs()
 
     def get_upstream_samples(self, hru_i: int, edge_index: Tensor) -> list[int]:
-        """
-        Return a list of indices representing all upstream HRUs (Hydrologic Response Units) for a given HRU in a graph.
+        """Return a list of indices representing all upstream HRUs (Hydrologic Response Units) for a given HRU in a graph.
 
         This method uses the k-hop subgraph algorithm to find all nodes that are connected to the specified HRU node,
         effectively identifying all upstream samples within the graph structure.
@@ -1291,8 +1255,7 @@ class GraphDataModule(pl.LightningDataModule):
         self,
         stage: Literal["init", "train", "valid", "test", "pred"],
     ) -> HRUData:
-        """
-        Generate a dataset instance for the specified training or evaluation stage.
+        """Generate a dataset instance for the specified training or evaluation stage.
 
         Args:
             stage (Literal['init', 'train', 'valid', 'test', 'pred']): Stage for which the dataset is being generated.
@@ -1342,8 +1305,7 @@ class GraphDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the training dataset.
+        """Create a DataLoader for the training dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the training dataset.
@@ -1364,8 +1326,7 @@ class GraphDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the validation dataset.
+        """Create a DataLoader for the validation dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the validation dataset.
@@ -1386,8 +1347,7 @@ class GraphDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the test dataset.
+        """Create a DataLoader for the test dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the test dataset.
@@ -1408,8 +1368,7 @@ class GraphDataModule(pl.LightningDataModule):
         )
 
     def predict_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the prediction dataset.
+        """Create a DataLoader for the prediction dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the prediction dataset.
@@ -1480,8 +1439,7 @@ class GraphDataModule(pl.LightningDataModule):
 
 
 class HRUDataModule(pl.LightningDataModule):
-    """
-    PyTorch Lightning DataModule for HRU-based time-series modeling without graph structure.
+    """PyTorch Lightning DataModule for HRU-based time-series modeling without graph structure.
 
     This module is tailored for time-series models that operate at the Hydrologic Response Unit (HRU) level
     without requiring spatial graphs. It prepares datasets for different stages (train, validation, test, prediction),
@@ -1526,8 +1484,7 @@ class HRUDataModule(pl.LightningDataModule):
         val_time_range: list[str]
         | None = None,  # Keep for compatibility with fast_dev_run_config.yaml, not used in this class.
     ) -> None:
-        """
-        Initialize the HRUDataModule.
+        """Initialize the HRUDataModule.
 
         This constructor sets up the module by loading the dataset from disk, selecting HRUs for each stage,
         and preparing normalization parameters for features and targets based on the training data.
@@ -1593,8 +1550,7 @@ class HRUDataModule(pl.LightningDataModule):
             self.norm_args_targets = NoNormalizer.make_kwargs()
 
     def get_dataset(self, stage: Literal["init", "train", "valid", "test", "pred"]) -> HRUData:
-        """
-        Get the HRU dataset for a given stage.
+        """Get the HRU dataset for a given stage.
 
         Depending on the stage, the HRU subset and temporal parameters are adjusted.
 
@@ -1640,8 +1596,7 @@ class HRUDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the training dataset.
+        """Create a DataLoader for the training dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the training dataset.
@@ -1658,8 +1613,7 @@ class HRUDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the validation dataset.
+        """Create a DataLoader for the validation dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the validation dataset.
@@ -1676,8 +1630,7 @@ class HRUDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the test dataset.
+        """Create a DataLoader for the test dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the test dataset.
@@ -1694,8 +1647,7 @@ class HRUDataModule(pl.LightningDataModule):
         )
 
     def predict_dataloader(self) -> DataLoader:
-        """
-        Create a DataLoader for the prediction dataset.
+        """Create a DataLoader for the prediction dataset.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the prediction dataset.

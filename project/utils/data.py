@@ -1,14 +1,15 @@
 """Data utilities."""
 
-from glob import glob
 import os
+from glob import glob
 from pathlib import Path
+
 import geopandas as gpd
+import numpy as np
+import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
-import numpy as np
 from rasterio import features as rio_features
-import xarray as xr
 
 from project.core.utils import get_zarr_v3_encoding
 
@@ -20,6 +21,7 @@ def sel_cv_set(ds: xr.Dataset, cv_sets: int | list[int]) -> xr.Dataset:
         ds (xr.Dataset): Dataset containing cross-validation sets.
         cv_sets (int | list[int]): Cross-validation sets to select. Can be a single integer or a list of integers.
             0: no set, 1: train, 2: valid, 3: test.
+
     Returns:
         xr.Dataset: Dataset filtered by the specified cross-validation sets.
 
@@ -29,7 +31,7 @@ def sel_cv_set(ds: xr.Dataset, cv_sets: int | list[int]) -> xr.Dataset:
 
     for cv_set in cv_sets:
         for cv_set in cv_sets:
-            if cv_set not in range(0, 4):
+            if cv_set not in range(4):
                 raise ValueError(
                     "'cv_sets' must contain integers in range [0, 3], where "
                     f"0=not used, 1=training, 2=validation, 3=test, but is `{cv_set}`,"

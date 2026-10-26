@@ -25,8 +25,7 @@ class TorchNormalizer(torch.nn.Module):
         norm_args_stat_routing_features: dict | None = None,
         norm_args_targets: dict | None = None,
     ) -> None:
-        """
-        Initialize module, should be subclassed.
+        """Initialize module, should be subclassed.
 
         Args:
             norm_args_dyn_features: normalization arguments for dynamic features, defaults to None.
@@ -58,15 +57,14 @@ class TorchNormalizer(torch.nn.Module):
             self.norm_targets = NoNormalizer()
 
     def normalize_inputs(self, batch: HRUSample) -> HRUSample:
-        """
-        Normalize the input data in the batch.
+        """Normalize the input data in the batch.
 
         Parameters
         ----------
         batch : HRUSample
             Input batch containing time series, static features, and targets.
 
-        Returns
+        Returns:
         -------
         HRUSample
             Normalized batch with transformed features.
@@ -78,15 +76,14 @@ class TorchNormalizer(torch.nn.Module):
         return batch
 
     def normalize_targets(self, batch: HRUSample) -> HRUSample:
-        """
-        Normalize the target data in the batch.
+        """Normalize the target data in the batch.
 
         Parameters
         ----------
         batch : HRUSample
             Input batch containing targets.
 
-        Returns
+        Returns:
         -------
         HRUSample
             Batch with normalized targets.

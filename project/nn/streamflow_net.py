@@ -821,7 +821,7 @@ class StreamflowNet(pl.LightningModule):
 
         if len(hits) == 0:
             raise FileNotFoundError(f"No '**/tune/optuna.db' files found in '{experiment_dir}'.")
-        elif len(hits) > 1:
+        if len(hits) > 1:
             raise ValueError(
                 f"Multiple '**/tune/optuna.db' files found in '{experiment_dir}', please specify "
                 f"a directory with only one such file. Hits were:"

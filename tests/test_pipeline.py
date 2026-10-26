@@ -1,5 +1,4 @@
 # tests/test_pipeline.py
-# -*- coding: utf-8 -*-
 import os
 
 import numpy as np

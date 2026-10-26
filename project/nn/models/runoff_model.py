@@ -2,6 +2,7 @@
 
 from math import ceil
 from typing import cast
+
 import torch
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint as grad_checkpoint
@@ -9,7 +10,6 @@ from torch.utils.checkpoint import checkpoint as grad_checkpoint
 from project.nn.layers.lstm import LSTM
 from project.nn.models.base import TorchNormalizer
 from project.utils.typing import HRUSample
-from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
 class RunoffModel(torch.nn.Module):
@@ -106,8 +106,7 @@ class RunoffModel(torch.nn.Module):
     def forward(
         self, batch: HRUSample, subset: Tensor | None, scale_output: bool, sample_slice: slice | None = None
     ) -> Tensor:
-        """
-        Forward pass through the model.
+        """Forward pass through the model.
 
         Args:
             batch (BaHRUSampletch): Graph batch containing input tensors.
@@ -125,8 +124,7 @@ class RunoffModel(torch.nn.Module):
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
     def chunked_forward(self, batch: HRUSample, scale_output: bool, subset: Tensor | None = None) -> Tensor:
-        """
-        Memory-efficient forward pass using chunking to avoid OOM issues.
+        """Memory-efficient forward pass using chunking to avoid OOM issues.
 
         Processes nodes in chunks to limit peak activation memory, while preserving
         the computation graph (gradients flow through each chunk via torch.cat).
@@ -169,8 +167,7 @@ class RunoffModel(torch.nn.Module):
         return self.transform_output(batch=batch, q=out, scale_output=scale_output, subset=subset)
 
     def transform_output(self, batch: HRUSample, q: Tensor, scale_output: bool, subset: Tensor | None) -> Tensor:
-        """
-        Apply optional transformations to model output runoff predictions.
+        """Apply optional transformations to model output runoff predictions.
 
         This method scales and/or adjusts the raw runoff predictions (`q`) depending on:
         - Whether the runoff was normalized during training

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, fields
 from typing import TypeVar
+
 import numpy as np
 import torch
 from torch import Tensor
@@ -10,8 +11,7 @@ AnyNotNone = TypeVar("AnyNotNone")
 
 
 def assert_non_NaN(x: AnyNotNone | None) -> AnyNotNone:
-    """
-    Assert that the input x is not None.
+    """Assert that the input x is not None.
 
     Parameters:
         x (AnyNotNone): The input to check.
@@ -94,8 +94,7 @@ class HRUSample:
     time_slice: list[int]
 
     def to(self, device: torch.device | str) -> "HRUSample":
-        """
-        Move all Tensor fields of the HRUSample instance to the specified device.
+        """Move all Tensor fields of the HRUSample instance to the specified device.
 
         Args:
             device (torch.device | str): The target device to move the tensors to.

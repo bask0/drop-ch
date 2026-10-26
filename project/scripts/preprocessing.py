@@ -6,30 +6,30 @@ NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited 
 import gzip
 import os
 import pathlib
-from pathlib import Path
 import shutil
 import struct
 import tarfile
 import warnings
+from pathlib import Path
+
 import geopandas as gpd
-from joblib import dump, load
 import numpy as np
 import pandas as pd
 import pyreadr
-import rasterio as rio  # keep
-from rasterio import enums
-from rasterio.enums import MergeAlg
 import rasterio.features as rfeatures
 import richdem as rd
 import rioxarray as rxr
+import torch
+import xarray as xr
+import xrspatial as xrs
+from joblib import dump, load
+from rasterio import enums
+from rasterio.enums import MergeAlg
 from scipy.stats import circmean
 from shapely import force_2d
 from sklearn.neural_network import MLPRegressor as MPL
-import torch
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
-import xarray as xr
-import xrspatial as xrs
 
 warnings.filterwarnings("ignore", module="pyproj", category=UserWarning)
 
@@ -122,8 +122,7 @@ def reproject_like(x: xr.Dataset, ref: xr.Dataset | None, resampling=enums.Resam
 
         return x.rio.reproject_match(ref, resampling=resampling, **kwargs)
 
-    else:
-        return x.rio.reproject(ref, resampling=resampling, **kwargs)
+    return x.rio.reproject(ref, resampling=resampling, **kwargs)
 
 
 def read_rds(path: str | os.PathLike) -> pd.DataFrame:
@@ -472,7 +471,7 @@ def raster_to_hrus_prevah(time, return_prevah_grid=False):
     tar_path = Path(f"/path/to/raw_data/machflow_routing/data/raw/prevah_500/compressed/wsl2zero_{time_flat}.tgz")
 
     if not tar_path.exists():
-        return
+        return None
 
     tar = tarfile.open(tar_path)
 

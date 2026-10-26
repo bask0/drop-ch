@@ -2,14 +2,16 @@
 
 import logging
 import os
-from typing import Any, Sequence, cast
+from collections.abc import Sequence
+from typing import Any, cast
+
 import lightning.pytorch as pl
+import numpy as np
+import xarray as xr
 from lightning.pytorch.callbacks import BasePredictionWriter
 from lightning.pytorch.profilers import PyTorchProfiler
-import numpy as np
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 from torch.utils.data import DataLoader
-import xarray as xr
 from zarr.codecs import BloscCodec, BloscShuffle
 
 logger = logging.getLogger("pytorch_lightning")
@@ -58,18 +60,16 @@ def get_zarr_v3_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
 
 
 class PredictionWriter(BasePredictionWriter):
-    """
-    Custom prediction writer for PyTorch Lightning that saves predictions into a Zarr dataset.
+    """Custom prediction writer for PyTorch Lightning that saves predictions into a Zarr dataset.
 
-    Attributes
+    Attributes:
     ----------
     write_all_variables : bool
         Whether to write all variables from the dataset or just the ones in `variables`.
     """
 
     def __init__(self, write_all_variables: bool = False) -> None:
-        """
-        Initialize the prediction writer.
+        """Initialize the prediction writer.
 
         Parameters
         ----------
@@ -86,8 +86,7 @@ class PredictionWriter(BasePredictionWriter):
         predictions: Sequence[dict],
         batch_indices: Sequence[Any],
     ) -> None:
-        """
-        Write predictions into a Zarr dataset at the end of the prediction epoch.
+        """Write predictions into a Zarr dataset at the end of the prediction epoch.
 
         Parameters
         ----------

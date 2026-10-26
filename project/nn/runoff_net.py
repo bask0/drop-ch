@@ -15,8 +15,7 @@ from project.utils.unit_conversion import convert_mmd_to_m3s
 
 
 class RunoffNet(LightningModuleWithSummary):
-    """
-    PyTorch Lightning module for predicting river runoff using an LSTM-based architecture.
+    """PyTorch Lightning module for predicting river runoff using an LSTM-based architecture.
 
     This model wraps a `RunoffModel` for sequence-to-sequence runoff forecasting and includes
     preprocessing and postprocessing steps for unit conversions, normalization, and optional
@@ -42,8 +41,7 @@ class RunoffNet(LightningModuleWithSummary):
         norm_args_targets: dict | None = None,
         **kwargs,  # Keep.
     ) -> None:
-        """
-        Initialize a RunoffNet instance.
+        """Initialize a RunoffNet instance.
 
         This model wraps a `RunoffModel` for sequence-to-sequence runoff forecasting,
         including optional preprocessing (normalization, precipitation substitution)
@@ -82,7 +80,7 @@ class RunoffNet(LightningModuleWithSummary):
             kwargs:
                 Argument sink.
 
-        Raises
+        Raises:
         ------
         ValueError
             If `prediction_length` is not provided.
@@ -119,8 +117,7 @@ class RunoffNet(LightningModuleWithSummary):
         self.loss_fun = RegressionLoss(criterion="l2", log_transform=False)
 
     def log_loss(self, loss: dict[str, Tensor], batch: HRUSample, mode: Literal["train", "valid", "test"]) -> None:
-        """
-        Log loss values for a given training phase.
+        """Log loss values for a given training phase.
 
         Parameters
         ----------
@@ -131,7 +128,7 @@ class RunoffNet(LightningModuleWithSummary):
         mode : {'train', 'valid', 'test'}
             The current training phase.
 
-        Raises
+        Raises:
         ------
         ValueError
             If `mode` is not one of 'train', 'valid', or 'test'.
@@ -148,8 +145,7 @@ class RunoffNet(LightningModuleWithSummary):
         )
 
     def forward(self, *args, **kwargs) -> Tensor:
-        """
-        Forward pass through the model.
+        """Forward pass through the model.
 
         This method is a wrapper around the `RunoffModel`'s forward method.
         """
@@ -157,8 +153,7 @@ class RunoffNet(LightningModuleWithSummary):
         return self.runoff_lstm(*args, **kwargs)
 
     def common_step(self, batch: HRUSample, subset: Tensor | None, chunked: bool) -> tuple[Tensor, Tensor]:
-        """
-        Shared logic for forward pass and loss computation.
+        """Shared logic for forward pass and loss computation.
 
         Parameters
         ----------
@@ -169,7 +164,7 @@ class RunoffNet(LightningModuleWithSummary):
         chunked : bool
             Whether to process inputs in chunks (avoids memory issues for long sequences).
 
-        Returns
+        Returns:
         -------
         y_hat : Tensor
             Predicted runoff time series.
@@ -197,8 +192,7 @@ class RunoffNet(LightningModuleWithSummary):
         return y_hat, loss
 
     def training_step(self, batch: HRUSample, batch_idx: int) -> Tensor:
-        """
-        Perform a single training step.
+        """Perform a single training step.
 
         Runs `common_step` without chunking and logs training loss.
 
@@ -209,7 +203,7 @@ class RunoffNet(LightningModuleWithSummary):
         batch_idx : int
             Batch index.
 
-        Returns
+        Returns:
         -------
         loss : Tensor
             Loss value for the batch.
@@ -222,8 +216,7 @@ class RunoffNet(LightningModuleWithSummary):
         return loss
 
     def validation_step(self, batch: HRUSample, batch_idx: int) -> Tensor:
-        """
-        Perform a single validation step.
+        """Perform a single validation step.
 
         Runs `common_step` without chunking and logs validation loss.
 
@@ -234,7 +227,7 @@ class RunoffNet(LightningModuleWithSummary):
         batch_idx : int
             Batch index.
 
-        Returns
+        Returns:
         -------
         loss : Tensor
             Loss value for the batch.
@@ -247,8 +240,7 @@ class RunoffNet(LightningModuleWithSummary):
         return loss
 
     def predict_step(self, batch: HRUSample, batch_idx: int) -> dict[str, Tensor]:
-        """
-        Generate predictions for a batch.
+        """Generate predictions for a batch.
 
         Parameters
         ----------
@@ -257,7 +249,7 @@ class RunoffNet(LightningModuleWithSummary):
         batch_idx : int
             Batch index.
 
-        Returns
+        Returns:
         -------
         dict[str, Tensor]
             - 'Q_pred_mmd': Predicted runoff in mm/day.
@@ -302,10 +294,9 @@ class RunoffNet(LightningModuleWithSummary):
         return return_dict
 
     def configure_optimizers(self) -> Optimizer:
-        """
-        Configure the optimizer.
+        """Configure the optimizer.
 
-        Returns
+        Returns:
         -------
         Optimizer
             An AdamW optimizer configured with the model's learning rate and weight decay.

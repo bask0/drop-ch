@@ -9,15 +9,10 @@ import shutil
 from pathlib import Path
 
 import numpy as np
-
-from owslib.wcs import WebCoverageService
-
 import rioxarray as rxr
-
-from tqdm import tqdm
-
 import xarray as xr
-
+from owslib.wcs import WebCoverageService
+from tqdm import tqdm
 
 logging.basicConfig(format="%(asctime)s | %(message)s", level=logging.INFO, datefmt="%m/%d/%Y %I:%M:%S %p")
 
@@ -121,7 +116,7 @@ for variable in (pbar := tqdm(variables)):
     while num_fails < 3:
         try:
             pbar.set_description(f"Processing `{variable:>12}` | trial {num_fails + 1}/3")
-            url = "http://maps.isric.org/mapserv?map=/map/{}.map".format(variable)
+            url = f"http://maps.isric.org/mapserv?map=/map/{variable}.map"
             wcs = WebCoverageService(url, version="1.0.0")
 
             num_fails = 99

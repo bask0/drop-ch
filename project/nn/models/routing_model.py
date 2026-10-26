@@ -105,7 +105,7 @@ class RoutingModel(torch.nn.Module):
         _, D, _ = self.instant_tnet(batch)
 
         # Iterate time dimension.
-        for t in range(0, batch.y.shape[1]):
+        for t in range(batch.y.shape[1]):
             Qt = D @ q[:, t, :]
 
             Q_store[:, t, :] = Qt
@@ -189,7 +189,7 @@ class RoutingModel(torch.nn.Module):
             T, D, k, x_retention = self.tnet(x_enc=x_enc, downstream_aligner=downstream_aligner)
 
         # Iterate time dimension.
-        for t in range(0, seq_length):
+        for t in range(seq_length):
             # Scale inputs by number of sub-steps to conserve mass.
             qt = q[:, t, :] / self.num_time_subseteps
             et = e[:, t, :] / self.num_time_subseteps

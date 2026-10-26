@@ -1,13 +1,13 @@
 """Transform layer for PyTorch."""
 
-from typing import Callable
+from collections.abc import Callable
+
 import torch
 from torch import Tensor
 
 
 class TransformLayer(torch.nn.Module):
-    """
-    Transform layer for PyTorch.
+    """Transform layer for PyTorch.
 
     Turn functions into layers.
     """
@@ -25,14 +25,13 @@ class TransformLayer(torch.nn.Module):
         Args:
             transform_fun (Callable): thetransform function.
         """
-        super(TransformLayer, self).__init__()
+        super().__init__()
 
         self.transform_fun = transform_fun
         self.name = name
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        Apply the transformation function to the input tensor.
+        """Apply the transformation function to the input tensor.
 
         Args:
             x (Tensor): Input tensor to be transformed.
@@ -43,8 +42,7 @@ class TransformLayer(torch.nn.Module):
         return self.transform_fun(x)
 
     def __repr__(self) -> str:
-        """
-        Return a string representation of the object, typically its name attribute.
+        """Return a string representation of the object, typically its name attribute.
 
         Returns:
             str: The name of the object.

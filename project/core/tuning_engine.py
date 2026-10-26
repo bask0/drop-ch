@@ -3,8 +3,7 @@
 # Description: Tuning engine module for managing hyperparameter optimization and cross-validation
 #              workflows using Optuna and PyTorch Lightning.
 
-"""
-Module for managing hyperparameter tuning and cross-validation with Optuna and PyTorch Lightning.
+"""Module for managing hyperparameter tuning and cross-validation with Optuna and PyTorch Lightning.
 
 This module defines the `TuningEngine` class and associated helpers for:
 - setting up reproducible experiments,
@@ -82,8 +81,7 @@ TYPE_MAP = {
 
 
 class TuningEngine:
-    """
-    Engine for hyperparameter tuning and cross-validation using Optuna with PyTorch Lightning.
+    """Engine for hyperparameter tuning and cross-validation using Optuna with PyTorch Lightning.
 
     This class orchestrates the full lifecycle of hyperparameter optimization and cross-validation
     experiments, including directory management, parameter sampling, study setup, and integration
@@ -144,8 +142,7 @@ class TuningEngine:
         resume: bool = False,
         profile: bool = False,
     ) -> None:
-        """
-        Initialize the TuningEngine with the specified configuration.
+        """Initialize the TuningEngine with the specified configuration.
 
         Args:
             sampler (optuna.samplers.BaseSampler): The Optuna sampler to use for hyperparameter suggestion.
@@ -220,8 +217,7 @@ class TuningEngine:
 
     @property
     def best_config_path(self) -> Path:
-        """
-        Path to the best configuration file from tuning.
+        """Path to the best configuration file from tuning.
 
         Returns:
             Path: The path to the best configuration file.
@@ -239,8 +235,7 @@ class TuningEngine:
 
     @property
     def best_checkpoint_path(self) -> Path:
-        """
-        Path to the best model checkpoint from tuning.
+        """Path to the best model checkpoint from tuning.
 
         Returns:
             Path: The path to the best model checkpoint.
@@ -257,8 +252,7 @@ class TuningEngine:
         return best_checkpoint_path
 
     def setup(self, which: Literal["all", "tune", "xval"]) -> None:
-        """
-        Set up the experiment environment based on the specified mode.
+        """Set up the experiment environment based on the specified mode.
 
         WARNING: This method will delete existing log directories if `overwrite` is True.
 
@@ -314,8 +308,7 @@ class TuningEngine:
         # self._create_symlink(self.log_dir, self.exp_dir / "logs", force=self.overwrite or self.resume)
 
     def tune(self) -> optuna.Study:
-        """
-        Run the hyperparameter tuning process using Optuna and manages the best configuration.
+        """Run the hyperparameter tuning process using Optuna and manages the best configuration.
 
         If tuning is skipped (`self.skip_tuning` is True), loads and returns an existing Optuna study.
         Otherwise, runs the tuning process, copies the best configuration file to the experiment directory,
@@ -379,8 +372,7 @@ class TuningEngine:
         return study
 
     def xval(self, use_best_tuning_checkpoint: bool = False) -> optuna.Study:
-        """
-        Perform cross-validation by running the tuning engine without hyperparameter optimization.
+        """Perform cross-validation by running the tuning engine without hyperparameter optimization.
 
         Args:
             use_best_tuning_checkpoint (bool, optional): If True, uses the best checkpoint from the tuning run
@@ -403,8 +395,7 @@ class TuningEngine:
         return study
 
     def run(self, is_tune: bool = True, use_best_tuning_checkpoint: bool = False) -> optuna.Study:
-        """
-        Run the Optuna study for hyperparameter tuning or cross-validation.
+        """Run the Optuna study for hyperparameter tuning or cross-validation.
 
         Args:
             is_tune (bool, optional): If True, runs hyperparameter tuning using the configured sampler and pruner.
@@ -478,8 +469,7 @@ class TuningEngine:
         return study
 
     def objective(self, trial: "Trial", is_tune: bool, use_best_tuning_checkpoint: bool = False) -> float:
-        """
-        Objective function for Optuna hyperparameter optimization or cross-validation.
+        """Objective function for Optuna hyperparameter optimization or cross-validation.
 
         This function configures and runs a PyTorch Lightning training session using the provided trial's
         hyperparameters. It supports both hyperparameter tuning (is_tune=True) and cross-validation (is_tune=False)
@@ -588,8 +578,7 @@ class TuningEngine:
         return val_loss
 
     def sample_parameters(self, trial: "Trial") -> list[str]:
-        """
-        Sample parameters from the defined search space using the provided Optuna trial object.
+        """Sample parameters from the defined search space using the provided Optuna trial object.
 
         For each parameter in the search space, this method selects a value based on the specified
         suggestion method ("loguniform", "uniform", "int", or "categorical") and appends it as a
@@ -666,8 +655,7 @@ class TuningEngine:
         return suggested_params
 
     def xval_parameters(self, trial: "Trial") -> list[str]:
-        """
-        Suggests the cross-validation fold index for the current trial and formats it as a CLI argument.
+        """Suggests the cross-validation fold index for the current trial and formats it as a CLI argument.
 
         This method uses the provided Optuna trial to select a fold index in the range [0, num_folds - 1].
         The selected fold index is returned as a command-line argument suitable for passing to the data module.
@@ -684,8 +672,7 @@ class TuningEngine:
         return [f"--data.init_args.fold_idx={val}"]
 
     def _add_user_attrs(self, study: "Study") -> None:
-        """
-        Add user attributes to the Optuna study.
+        """Add user attributes to the Optuna study.
 
         Args:
             study (Study): The Optuna trial object to which attributes will be added.
@@ -702,8 +689,7 @@ class TuningEngine:
 
     @staticmethod
     def _get_cli_config_and_args() -> tuple[list[str], list[str]]:
-        """
-        Parse command-line arguments to separate configuration file paths from other CLI arguments.
+        """Parse command-line arguments to separate configuration file paths from other CLI arguments.
 
         This method scans sys.argv (excluding the script name) and extracts any config file paths
         specified via '--config', '-c', '--config=...', or '-c=...'. All other arguments are returned
@@ -736,8 +722,7 @@ class TuningEngine:
         return config_files, args
 
     def _get_storage(self, db_path: Path, **kwargs) -> optuna.storages.RDBStorage:
-        """
-        Create and return an Optuna RDBStorage instance for the specified SQLite database path.
+        """Create and return an Optuna RDBStorage instance for the specified SQLite database path.
 
         Args:
             db_path (Path): Path to the SQLite database file. The path will be resolved to an absolute path.
@@ -757,8 +742,7 @@ class TuningEngine:
         )
 
     def _init_optuna_study(self, db_path: Path) -> None:
-        """
-        Initialize an Optuna study with the specified database path.
+        """Initialize an Optuna study with the specified database path.
 
         Attempts to create a new Optuna study using the experiment name and storage backend.
         If a study with the same name already exists, the creation is skipped.
@@ -783,8 +767,7 @@ class TuningEngine:
             logger.info("Optuna study already exists — skipping creation.")
 
     def _create_dirs_if_needed(self, dir: PathLike | str, remove: bool = False) -> None:
-        """
-        Create the specified directory if it does not exist, with optional removal of existing contents.
+        """Create the specified directory if it does not exist, with optional removal of existing contents.
 
         Args:
             dir (PathLike | str): The target directory path to create.
@@ -829,8 +812,7 @@ class TuningEngine:
 
     @staticmethod
     def _create_symlink(source: Path | str, target: Path | str, force: bool = True) -> None:
-        """
-        Create a symbolic link pointing from `target` to `source`.
+        """Create a symbolic link pointing from `target` to `source`.
 
         Args:
             source (Path | str): The original file or directory.
@@ -864,8 +846,7 @@ class TuningEngine:
         logging.info(f"Created symlink: {target} → {source}")
 
     def _flatten_dict(self, d: dict, parent_key: str = "", sep: str = ".") -> dict[str, dict]:
-        """
-        Recursively flattens a nested dictionary, concatenating keys with a separator.
+        """Recursively flattens a nested dictionary, concatenating keys with a separator.
 
         Args:
             d (dict): The dictionary to flatten.
@@ -919,8 +900,7 @@ class TuningEngine:
         return log_file
 
     def _get_trial_version_string(self, trial_number: int, is_tune: bool) -> str:
-        """
-        Generate a version string for the given trial number and mode.
+        """Generate a version string for the given trial number and mode.
 
         Args:
             trial_number (int): The trial number.

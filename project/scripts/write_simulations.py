@@ -4,8 +4,9 @@ NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited 
 """
 
 import os
-from dask.diagnostics.progress import ProgressBar
+
 import xarray as xr
+from dask.diagnostics.progress import ProgressBar
 from zarr.codecs import BloscCodec, BloscShuffle
 
 

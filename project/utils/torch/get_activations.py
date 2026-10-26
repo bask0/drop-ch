@@ -1,6 +1,7 @@
 """PyTorch utils."""
 
 from typing import Literal, cast
+
 import torch
 
 ActivationLiteral = Literal["relu", "leakyrelu", "selu", "sigmoid", "softplus", "tanh", "identity", "linear", "none"]

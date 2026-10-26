@@ -13,8 +13,7 @@ logger = logging.getLogger("pytorch_lightning")
 
 
 class NSELoss(torch.nn.Module):
-    """
-    Compute NSE loss.
+    """Compute NSE loss.
 
     PyTorch implementation of Nash-Sutcliffe Modeling Efficiency (NSE)
     https://en.wikipedia.org/wiki/Nash%E2%80%93Sutcliffe_model_efficiency_coefficient
@@ -26,8 +25,7 @@ class NSELoss(torch.nn.Module):
     """
 
     def __init__(self, eps: float = 0.1, reduction: str = "mean") -> None:
-        """
-        Initialize NSELoss.
+        """Initialize NSELoss.
 
         Args:
             eps: the constant term which is added to the denominator for stability.
@@ -54,8 +52,7 @@ class NSELoss(torch.nn.Module):
             raise ValueError(f"'reduction' must be one of 'mean' or 'none', is '{reduction}'.")
 
     def forward(self, input: Tensor, target: Tensor, basin_std: Tensor) -> Tensor:
-        """
-        Compute NSE.
+        """Compute NSE.
 
         Args:
             input (Tensor): Predicted values.
@@ -74,13 +71,11 @@ class NSELoss(torch.nn.Module):
 
         if self.reduction == "none":
             return loss
-        else:
-            return loss.mean()
+        return loss.mean()
 
 
 class SkillScore(torch.nn.Module):
-    """
-    Compute Skill Score (SS) loss.
+    """Compute Skill Score (SS) loss.
 
     SS = MSE_pred / MSE_ref
 
@@ -91,8 +86,7 @@ class SkillScore(torch.nn.Module):
     """
 
     def __init__(self, reduction: str = "mean", focal_loss_alpha: float | None = None) -> None:
-        """
-        Intialize NSELoss.
+        """Intialize NSELoss.
 
         Args:
             reduction: reduction of the losses, either 'mean' or 'none' (i.e., no reduction).
@@ -121,8 +115,7 @@ class SkillScore(torch.nn.Module):
         self.focal_loss_alpha = focal_loss_alpha
 
     def forward(self, input: Tensor, target: Tensor, reference: Tensor) -> Tensor:
-        """
-        Compute a normalized mean squared error loss between `input` and `target`.
+        """Compute a normalized mean squared error loss between `input` and `target`.
 
         Using `reference` as a baseline for normalization and optionally applies a focal
         weighting to emphasize harder examples.
@@ -162,13 +155,11 @@ class SkillScore(torch.nn.Module):
 
         if self.reduction == "none":
             return loss
-        else:
-            return loss.mean()
+        return loss.mean()
 
 
 class RegressionLoss(nn.Module):
-    """
-    Loss functions that ignore NaN in target.
+    """Loss functions that ignore NaN in target.
 
     The loss funtion allows for having missing / non-finite values in the target.
 
@@ -177,7 +168,7 @@ class RegressionLoss(nn.Module):
     With sqrt_transform=True, negative target values are set to 0, and the model predictions are expected to be >= 0.
     This can be achieved by using an activation function such as ReLU or Softplus.
 
-    Example
+    Example:
     -------
     >>> import torch
     >>> mse_loss = RegressionLoss(sample_wise=True)
@@ -240,7 +231,7 @@ class RegressionLoss(nn.Module):
 
         """
 
-        super(RegressionLoss, self).__init__()
+        super().__init__()
 
         criterion = criterion.lower()
 
@@ -331,8 +322,7 @@ class RegressionLoss(nn.Module):
         return loss
 
     def __repr__(self) -> str:
-        """
-        Return a string representation of the RegressionLoss instance with the criterion and sqrt_transform attributes.
+        """Return a string representation of the RegressionLoss instance with the criterion and sqrt_transform attributes.
 
         Returns:
             str: A formatted string showing the values of criterion and sqrt_transform.
@@ -344,8 +334,7 @@ class RegressionLoss(nn.Module):
 
 
 class EnergyLoss(nn.Module):
-    """
-    Energy loss that ignore NaN in target.
+    """Energy loss that ignore NaN in target.
 
     https://arxiv.org/pdf/2307.00835
     The loss funtion allows for having missing / non-finite values in the target.
@@ -357,8 +346,7 @@ class EnergyLoss(nn.Module):
     """
 
     def __init__(self, beta: float = 1.0, es_length: int = 1) -> None:
-        """
-        Initialize RegressionLoss.
+        """Initialize RegressionLoss.
 
         Args:
             beta : float
@@ -368,7 +356,7 @@ class EnergyLoss(nn.Module):
 
         """
 
-        super(EnergyLoss, self).__init__()
+        super().__init__()
 
         self.beta = beta
         self.es_length = es_length
@@ -421,8 +409,7 @@ class EnergyLoss(nn.Module):
         return loss
 
     def reshape_to_es_length(self, x: Tensor, es_length: int) -> Tensor:
-        """
-        Reshape the input tensor `x` to have a specified energy score length (`es_length`).
+        """Reshape the input tensor `x` to have a specified energy score length (`es_length`).
 
         The method handles input tensors of varying dimensions:
         - If `x` is 1D, it is unsqueezed to 2D.
@@ -466,8 +453,7 @@ class EnergyLoss(nn.Module):
         return x
 
     def mean_masked(self, x: Tensor, mask_num_finite: Tensor, dim: int = -1) -> Tensor:
-        """
-        Compute the mean of tensor `x` along the specified dimension ignoring NaN values.
+        """Compute the mean of tensor `x` along the specified dimension ignoring NaN values.
 
         Args:
             x (Tensor): The input tensor to compute the mean from.
@@ -481,8 +467,7 @@ class EnergyLoss(nn.Module):
         return x.sum(dim) / mask_num_finite
 
     def __repr__(self) -> str:
-        """
-        Return a string representation of the EnergyLoss instance, including the values of beta and es_length.
+        """Return a string representation of the EnergyLoss instance, including the values of beta and es_length.
 
         Returns:
             str: A formatted string displaying the class name and the current values of beta and es_length.

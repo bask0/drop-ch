@@ -3,8 +3,7 @@
 # Description: CLI interface for configuring and running hyperparameter optimization and cross-validation
 #              workflows using Optuna and PyTorch Lightning.
 
-"""
-Custom LightningCLI wrapper for configuring and executing model training workflows with Optuna.
+"""Custom LightningCLI wrapper for configuring and executing model training workflows with Optuna.
 
 This module defines a specialized CLI class (`CLI`) that extends PyTorch Lightning’s `LightningCLI`.
 It provides structured argument parsing, dynamic class instantiation (including Optuna samplers/pruners),
@@ -41,8 +40,7 @@ warnings.filterwarnings("ignore", ".*You requested to overfit.*")
 
 
 class CLI(LightningCLI):
-    """
-    A custom LightningCLI for configuring and executing model training using Optuna and PyTorch Lightning.
+    """A custom LightningCLI for configuring and executing model training using Optuna and PyTorch Lightning.
 
     This class wraps around the PyTorch LightningCLI to provide additional argument parsing,
     callback configuration, and dynamic instantiation of tuning-related components such as
@@ -56,8 +54,7 @@ class CLI(LightningCLI):
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the class with the provided keyword arguments.
+        """Initialize the class with the provided keyword arguments.
 
         This constructor calls the superclass initializer with specific arguments to set up
         the LightningModule and LightningDataModule, along with additional configuration options.
@@ -78,8 +75,7 @@ class CLI(LightningCLI):
         )
 
     def add_arguments_to_parser(self, parser):
-        """
-        Add custom arguments and argument blocks to the provided parser for configuration.
+        """Add custom arguments and argument blocks to the provided parser for configuration.
 
         This method first adds base arguments from the superclass, then registers arguments for the
         TuningEngine class under the "tuning_engine" namespace. It links relevant arguments (such as
@@ -165,8 +161,7 @@ class CLI(LightningCLI):
         parser.link_arguments("tuning_engine.pruner.init_args.max_resource", "model.init_args.lr_cycle_epochs")
 
     def before_instantiate_classes(self):
-        """
-        Prepare and instantiates the tuning engine and its dependencies before class instantiation.
+        """Prepare and instantiates the tuning engine and its dependencies before class instantiation.
 
         This method performs the following steps:
         1. Imports the TuningEngine class to avoid circular imports.
@@ -201,8 +196,7 @@ class CLI(LightningCLI):
         self.tuning_engine = TuningEngine(sampler=sampler, pruner=pruner, **tuner_cfg)
 
     def class_instantiate(self, cfg):
-        """
-        Dynamically instantiate a class from a configuration dictionary.
+        """Dynamically instantiate a class from a configuration dictionary.
 
         Args:
             cfg (dict): Configuration dictionary with the following keys:

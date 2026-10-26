@@ -1,5 +1,4 @@
 # tests/test_config_resolution.py
-# -*- coding: utf-8 -*-
 """Fast, no-data/no-GPU checks that experiment configs resolve via CLI without errors.
 
 These tests exercise the same `${data_root}`/`${log_root}` interpolation (experiments/paths.yaml)

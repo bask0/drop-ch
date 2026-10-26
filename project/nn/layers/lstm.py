@@ -145,8 +145,7 @@ class VariationalDropout(torch.nn.Module):
 
 
 class LSTM(torch.nn.Module):
-    """
-    LSTM module with static and dynamic input encodings.
+    """LSTM module with static and dynamic input encodings.
 
     This module uses separate encoders for static and dynamic inputs, processes the
     temporally encoded dynamic inputs with an LSTM, and outputs predictions through
@@ -169,8 +168,7 @@ class LSTM(torch.nn.Module):
         variational_dropout: float = 0.0,
         **kwargs,
     ) -> None:
-        """
-        Initialize the LSTM model.
+        """Initialize the LSTM model.
 
         Args:
             num_static_in (int): Number of static input features.
@@ -225,8 +223,7 @@ class LSTM(torch.nn.Module):
         self.output_activation = torch.nn.Identity()
 
     def forward(self, x: Tensor, s: Tensor) -> Tensor:
-        """
-        Forward pass of the model.
+        """Forward pass of the model.
 
         Args:
             x (Tensor): Dynamic input tensor of shape (B, S, D), where
