@@ -1,9 +1,9 @@
 [project]
 authors = [{name = "bask0", email = "29065166+bask0@users.noreply.github.com"}]
 dependencies = []
-name = "streamflow-net"
+name = "drop"
 requires-python = ">= 3.11"
-version = "0.2.0"
+version = "0.3.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["project"]
@@ -88,7 +88,7 @@ jsonargparse = { version = ">=4.18.0", extras = ["signatures"] }
 kaleido = "*"
 
 # Local packages
-streamflow-net = { path = ".", editable = true }
+drop = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 export-environment = { description = "Export the current environment to environment.yaml", cmd = "pixi workspace export conda-environment > environment.yaml" }
