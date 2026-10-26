@@ -9,7 +9,8 @@
 
 module load eth_proxy  # remove/replace if not on ETH Euler
 
+# Uses the tuning database of <log_root>/routed/random (experiments/paths.yaml).
 pixi run python -m project.scripts.compute_source_contribution \
-    --optuna_tune_db '/path/to/logs/routed/random/tune/optuna.db' \
+    --experiment routed/random \
     --date_start 2006-07-10 \
     --date_end 2007-08-09

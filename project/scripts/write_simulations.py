@@ -1,14 +1,17 @@
-"""Write simulations to compressed netCDF4 file.
+"""Write simulations to a compressed Zarr file, bundled into a single tar file.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
-directories before running.
+By default, reads the combined predictions written by combine_predictions.py, `<log_root>/predictions_combined.zarr`,
+and writes `<log_root>/predictions_compressed.zarr`, with `log_root` from experiments/paths.yaml.
 """
 
 import os
+from argparse import ArgumentParser
 
 import xarray as xr
 from dask.diagnostics.progress import ProgressBar
 from zarr.codecs import BloscCodec, BloscShuffle
+
+from project.utils.paths import get_path
 
 
 def get_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
@@ -56,12 +59,18 @@ def get_encoding(ds: xr.Dataset, clevel: int = 3) -> dict:
     return encoding
 
 
-ds = xr.open_zarr("/path/to/raw_data/machflow_routing/data/results/predictions.zarr")
+parser = ArgumentParser(description=__doc__)
+parser.add_argument("--in_path", type=str, default=None, help="Default is `<log_root>/predictions_combined.zarr`.")
+parser.add_argument("--out_path", type=str, default=None, help="Default is `<log_root>/predictions_compressed.zarr`.")
+args = parser.parse_args()
+
+in_path = args.in_path or str(get_path("log_root") / "predictions_combined.zarr")
+out_path = args.out_path or str(get_path("log_root") / "predictions_compressed.zarr")
+
+ds = xr.open_zarr(in_path)
 
 ds = ds[[var for var in ds.data_vars if not str(var).endswith("mmd")]]
 ds = ds.drop_vars(["Q_emulated", "Q_instant_pred_m3s"])
-
-out_path = "/path/to/raw_data/machflow_routing/data/results/predictions_compressed.zarr"
 
 encoding = get_encoding(ds, clevel=7)
 

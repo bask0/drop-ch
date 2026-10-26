@@ -1,13 +1,11 @@
 """Script to download and process MERIT and SoilGrids data.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
-directories before running.
+The data is written to `geodata_root` from experiments/paths.yaml.
 """
 
 import logging
 import os
 import shutil
-from pathlib import Path
 
 import numpy as np
 import rioxarray as rxr
@@ -15,9 +13,11 @@ import xarray as xr
 from owslib.wcs import WebCoverageService
 from tqdm import tqdm
 
+from project.utils.paths import get_path
+
 logging.basicConfig(format="%(asctime)s | %(message)s", level=logging.INFO, datefmt="%m/%d/%Y %I:%M:%S %p")
 
-data_dir = Path("/path/to/raw_data/data/merit/")
+data_dir = get_path("geodata_root") / "merit"
 nc_file = data_dir / "merit.nc"
 
 if not data_dir.exists():
@@ -97,13 +97,13 @@ ds.to_netcdf(nc_file)
 
 logging.info("Done.")
 
-data_dir = Path("/path/to/raw_data/data/soilgrids/")
+data_dir = get_path("geodata_root") / "soilgrids"
 
 if not data_dir.exists():
     os.makedirs(data_dir)
 
 
-ref_ds = xr.open_dataset("/path/to/raw_data/data/merit/merit.nc")
+ref_ds = xr.open_dataset(get_path("geodata_root") / "merit/merit.nc")
 
 variables = ["bdod", "sand", "silt", "clay", "cfvo"]
 depths = [(0, 5), (5, 15), (15, 30)]

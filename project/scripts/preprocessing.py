@@ -2,8 +2,9 @@
 
 Includes zonal statistics, reprojection, reading RDS files, and extracting features from raster data.
 
-NOTE: paths in this module are placeholders (`/path/to/...`) and must be edited to point to your own data
-directories before running.
+All input and output paths are configured in experiments/paths.yaml (`raw_data_root`, `geodata_root`,
+`meteoswiss_root` and `era5land_root` for inputs; the dataset is written to `data_root` and the HRU polygons to
+`hru_file`).
 """
 
 import gzip
@@ -13,7 +14,6 @@ import shutil
 import struct
 import tarfile
 import warnings
-from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -34,7 +34,14 @@ from sklearn.neural_network import MLPRegressor
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
+from project.utils.paths import dataset_path, get_path
+
 warnings.filterwarnings("ignore", module="pyproj", category=UserWarning)
+
+RAW_DATA_ROOT = get_path("raw_data_root")
+GEODATA_ROOT = get_path("geodata_root")
+METEOSWISS_ROOT = get_path("meteoswiss_root")
+ERA5LAND_ROOT = get_path("era5land_root")
 
 
 def circular_mean(directions):
@@ -144,12 +151,10 @@ TIME_START = "1992-01-01"
 TIME_END = "2023-12-31"  # '1992-12-31'
 NUM_PAR = 60
 
-cm = gpd.read_file("/path/to/raw_data/machflow_routing/data/raw/catchments_final").set_index("EZGNR")
+cm = gpd.read_file(RAW_DATA_ROOT / "raw/catchments_final").set_index("EZGNR")
 cm_geom = [(shapes, uid) for shapes, uid in zip(cm.geometry, cm.index, strict=True)]
-stations = gpd.read_file(
-    "/path/to/raw_data/machflow_routing/data/processed/hydro_ch/Inventory_discharge_hydroCH_manually_cleaned.gpkg"
-)
-dams = gpd.read_file("/path/to/raw_data/machflow_routing/data/processed/management/dams.gpkg")
+stations = gpd.read_file(RAW_DATA_ROOT / "processed/hydro_ch/Inventory_discharge_hydroCH_manually_cleaned.gpkg")
+dams = gpd.read_file(RAW_DATA_ROOT / "processed/management/dams.gpkg")
 
 # Temperature
 
@@ -169,19 +174,14 @@ def load_and_project_era5land(year, product, n_time_sample=-1, time_stamp=None):
     era_res = "d" if product == "TabsD" else "h"
 
     tmean_ms = (
-        xr.open_dataset(
-            f"/net/iacmeteo/sma/MeteoCH_gridded/{product}/{product}_ch01r.swiss.lv95_{year}01010000_{year}12310000.nc"
-        )
+        xr.open_dataset(METEOSWISS_ROOT / product / f"{product}_ch01r.swiss.lv95_{year}01010000_{year}12310000.nc")
         .drop_vars(["lon", "lat"])
         .rename({"E": "x", "N": "y"})
         .rio.write_crs(cm.crs)
     )
 
     tmean = (
-        xr.open_dataset(
-            f"/net/exo/landclim/data/dataset/ERA5-Land/recent/0.1deg_lat-lon_1h/processed/{era5_name}/"
-            f"era5-land_recent.t2m.01deg.1{era_res}.{year}.nc"
-        )
+        xr.open_dataset(ERA5LAND_ROOT / era5_name / f"era5-land_recent.t2m.01deg.1{era_res}.{year}.nc")
         .sel(lat=slice(45.6204, 48.12), lon=slice(5.7501, 10.75))
         .rename({"lat": "y", "lon": "x"})
     )
@@ -270,17 +270,17 @@ def predict(ds: xr.Dataset, fit: MLPRegressor):
 
 
 ref = (
-    xr.open_dataset("/net/iacmeteo/sma/MeteoCH_gridded/RhiresD/RhiresD_ch01h.swiss.lv95_202301010000_202312310000.nc")
+    xr.open_dataset(METEOSWISS_ROOT / "RhiresD/RhiresD_ch01h.swiss.lv95_202301010000_202312310000.nc")
     .drop_vars(["lon", "lat"])
     .rename({"E": "x", "N": "y"})
     .rio.write_crs(cm.crs)
     .RhiresD.isel(time=-1)
 )
-dem = xr.open_dataset("/path/to/raw_data/data/merit/merit.zarr").rio.write_crs("EPSG:4326")
+dem = xr.open_dataset(GEODATA_ROOT / "merit/merit.zarr").rio.write_crs("EPSG:4326")
 dem = reproject_like(x=dem[["elv"]], ref=ref, resampling=enums.Resampling.bilinear)
 
 product = "TabsD"
-intermediate_path = Path("/path/to/raw_data/machflow_routing/data/intermediate/")
+intermediate_path = RAW_DATA_ROOT / "intermediate"
 model_save_name = intermediate_path / f"fit_model_{product}.joblib"
 model_means_name = intermediate_path / f"fit_model_{product}_mean.nc"
 model_stds_name = intermediate_path / f"fit_model_{product}_std.nc"
@@ -320,7 +320,7 @@ if True:
     ).astype("float32")
 
     tair = (
-        xr.open_dataset("/net/iacmeteo/sma/MeteoCH_gridded/TabsD/TabsD_ch01r.swiss.lv95_202301010000_202312310000.nc")
+        xr.open_dataset(METEOSWISS_ROOT / "TabsD/TabsD_ch01r.swiss.lv95_202301010000_202312310000.nc")
         .rio.write_crs(cm.crs)
         .isel(time=0)
         .drop_vars(["lon", "lat"])
@@ -387,9 +387,7 @@ if True:
     ).astype("float32")
 
     prec = (
-        xr.open_dataset(
-            "/net/iacmeteo/sma/MeteoCH_gridded/RhiresD/RhiresD_ch01h.swiss.lv95_202301010000_202312310000.nc"
-        )
+        xr.open_dataset(METEOSWISS_ROOT / "RhiresD/RhiresD_ch01h.swiss.lv95_202301010000_202312310000.nc")
         .rio.write_crs(cm.crs)
         .isel(time=0)
         .drop_vars(["lon", "lat"])
@@ -418,9 +416,7 @@ def raster_to_hrus_prec(time):
     """Aggregate MeteoSwiss precipitation (RhiresD) for one day to the catchments."""
     year = time[:4]
     prec = (
-        xr.open_dataset(
-            f"/net/iacmeteo/sma/MeteoCH_gridded/RhiresD/RhiresD_ch01h.swiss.lv95_{year}01010000_{year}12310000.nc"
-        )
+        xr.open_dataset(METEOSWISS_ROOT / "RhiresD" / f"RhiresD_ch01h.swiss.lv95_{year}01010000_{year}12310000.nc")
         .rio.write_crs(cm.crs)
         .sel(time=time)
         .drop_vars(["lon", "lat"])
@@ -486,7 +482,7 @@ def raster_to_hrus_prevah(time, return_prevah_grid=False):
 
     time_flat = time.replace("-", "")
 
-    tar_path = Path(f"/path/to/raw_data/machflow_routing/data/raw/prevah_500/compressed/wsl2zero_{time_flat}.tgz")
+    tar_path = RAW_DATA_ROOT / "raw/prevah_500/compressed" / f"wsl2zero_{time_flat}.tgz"
 
     if not tar_path.exists():
         return None
@@ -518,7 +514,7 @@ def raster_to_hrus_prevah(time, return_prevah_grid=False):
 
 if True:
     tair = (
-        xr.open_dataset("/net/iacmeteo/sma/MeteoCH_gridded/TabsD/TabsD_ch01r.swiss.lv95_202301010000_202312310000.nc")
+        xr.open_dataset(METEOSWISS_ROOT / "TabsD/TabsD_ch01r.swiss.lv95_202301010000_202312310000.nc")
         .rio.write_crs(cm.crs)
         .isel(time=0)
         .drop_vars(["lon", "lat"])
@@ -645,7 +641,7 @@ side_stations = [
 # Remove stations.
 gdf = stations[~stations["ID"].isin(side_stations)]
 
-base_path = Path("/path/to/raw_data/machflow_routing/data/raw/hydro_ch/DischargeDBHydroCH")
+base_path = RAW_DATA_ROOT / "raw/hydro_ch/DischargeDBHydroCH"
 
 df_dict = {}
 no_overlay = []
@@ -802,9 +798,7 @@ print(f"No overlay for {len(no_overlay)} dams: {no_overlay}")
 
 print("Processing MERIT")
 
-merit = (
-    xr.open_dataset("/path/to/raw_data/data/merit/merit.nc").rio.write_crs("EPSG:4326").rename({"lat": "y", "lon": "x"})
-)
+merit = xr.open_dataset(GEODATA_ROOT / "merit/merit.nc").rio.write_crs("EPSG:4326").rename({"lat": "y", "lon": "x"})
 merit = merit.rio.reproject(cm.crs, resolution=(50, 50), resampling=enums.Resampling.bilinear).rename({"elv": "dem"})
 merit["slope"] = xr.full_like(merit["dem"], np.nan)
 merit["aspect"] = xr.full_like(merit["dem"], np.nan)
@@ -838,9 +832,7 @@ cm = zonal_aggregate(zones, merit.aspect, join_df=cm, stats_func={"mean": circul
 print("Processing SOILGRIDS")
 
 soilgrids = (
-    xr.open_dataset("/path/to/raw_data/data/soilgrids/soilgrids.nc")
-    .rio.write_crs("EPSG:4326")
-    .rename({"lat": "y", "lon": "x"})
+    xr.open_dataset(GEODATA_ROOT / "soilgrids/soilgrids.nc").rio.write_crs("EPSG:4326").rename({"lat": "y", "lon": "x"})
 )
 soilgrids = soilgrids.where(soilgrids >= 0, 0).compute()
 soilgrids = soilgrids.rio.reproject(cm.crs, resolution=(50, 50), resampling=enums.Resampling.bilinear)
@@ -868,9 +860,7 @@ for data_var in soilgrids.data_vars:
 
 print("Processing CORINE")
 
-corine = (
-    rxr.open_rasterio("/path/to/raw_data/data/corine/raw/U2018_CLC2018_V2020_20u1.tif").isel(band=0).drop_vars("band")
-)
+corine = rxr.open_rasterio(GEODATA_ROOT / "corine/raw/U2018_CLC2018_V2020_20u1.tif").isel(band=0).drop_vars("band")
 
 corine_reclass = xr.full_like(corine, fill_value=np.nan, dtype=np.float32)
 
@@ -923,8 +913,7 @@ for key, values in corine_class_map.items():
 
 print("Cleaning polygon data.")
 
-base_path = Path("/path/to/raw_data/machflow_routing/")
-rivers = gpd.read_file(base_path / "data/raw/rivernet/rivernet.shp")
+rivers = gpd.read_file(RAW_DATA_ROOT / "raw/rivernet/rivernet.shp")
 rivers = gpd.sjoin(rivers, cm, how="left", predicate="intersects")
 rivers = rivers.unary_union.intersection(cm.unary_union)
 rivers = gpd.GeoDataFrame(geometry=list(rivers.geoms)).set_crs(cm.crs)
@@ -935,8 +924,8 @@ cm["geometry"] = cm.geometry.apply(force_2d)
 rivers["geometry"] = rivers.geometry.apply(force_2d)
 rivers["geometry"] = rivers.simplify(tolerance=50)
 
-cm_out_file = base_path / "data/processed/hrus/hrus.gpkg"
-rivers_out_file = base_path / "data/processed/rivers/rivers.gpkg"
+cm_out_file = get_path("hru_file")
+rivers_out_file = RAW_DATA_ROOT / "processed/rivers/rivers.gpkg"
 cm.to_file(cm_out_file, driver="GPKG")
 rivers.to_file(rivers_out_file, driver="GPKG")
 
@@ -1063,7 +1052,7 @@ for data_var in ds.data_vars:
 
     encoding[data_var] = {"compressor": None, "chunks": chunking}
 
-out_path = Path("/path/to/raw_data/machflow_routing/data/processed/harmonized_hru_data.zarr")
+out_path = dataset_path()
 
 if out_path.exists():
     shutil.rmtree(
