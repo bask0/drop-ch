@@ -1,6 +1,6 @@
 <div align="center">
 
-# Streamflow-Net
+# DROP
 
 [![Tests](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -11,13 +11,15 @@
 
 **Author:** Basil Kraft
 
-Streamflow-Net is a data-driven neural network architecture for modeling and routing streamflow in distributed hydrological systems.
+DROP is a data-driven neural network architecture for modeling and routing streamflow in distributed hydrological systems.
 
-Designed to capture spatial and temporal dynamics of runoff generation and flow routing, Streamflow-Net leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components.
+Designed to capture spatial and temporal dynamics of runoff generation and flow routing, DROP leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components. In the code, the model is implemented as `StreamflowNet`.
 
 This repository contains the code accompanying the paper:
 
 > **TODO:** authors, title, journal, year, DOI.
+
+This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
 ## Project Structure
 
