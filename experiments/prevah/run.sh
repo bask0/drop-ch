@@ -46,10 +46,4 @@ for i in $(seq 2 $N_WORKERS); do
     ALL_JOBS="$ALL_JOBS:$JOB_ID"
 done
 
-XVAL_JOB=$(sbatch --parsable \
-    "${SBATCH_ARGS[@]}" \
-    --dependency=afterany:$ALL_JOBS \
-    slurm/srun_cuda.sh \
-    pixi run python xval.py "${CONFIG_ARGS[@]}" --tuning_engine.overwrite=True --tuning_engine.resume=False)
-
-echo "prevah xval job: $XVAL_JOB"
+# No cross-validation: routed and instant only use the best tuned model as their pretrained runoff model.

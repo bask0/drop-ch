@@ -109,27 +109,21 @@ sleep 2
 echo "=== Submitting lumped ==="
 LUMPED_RANDOM_TUNE=$(submit_split lumped random)
 sleep 2
-LUMPED_EASY_TUNE=$(submit_split lumped easy   "$LUMPED_RANDOM_TUNE")
-sleep 2
-LUMPED_HARD_TUNE=$(submit_split lumped hard   "$LUMPED_EASY_TUNE")
+LUMPED_HARD_TUNE=$(submit_split lumped hard   "$LUMPED_RANDOM_TUNE")
 sleep 2
 
 # ── ROUTED (sequential splits, starts after prevah tune is done) ──────────────
 echo "=== Submitting routed ==="
 ROUTED_RANDOM_TUNE=$(submit_split routed random "$PREVAH_DONE")
 sleep 2
-ROUTED_EASY_TUNE=$(submit_split routed easy   "$ROUTED_RANDOM_TUNE")
-sleep 2
-ROUTED_HARD_TUNE=$(submit_split routed hard   "$ROUTED_EASY_TUNE")
+ROUTED_HARD_TUNE=$(submit_split routed hard   "$ROUTED_RANDOM_TUNE")
 sleep 2
 
 # ── INSTANT (sequential splits, starts after routed tune is done) ─────────────
 echo "=== Submitting instant ==="
 INSTANT_RANDOM_TUNE=$(submit_split instant random "$ROUTED_HARD_TUNE")
 sleep 2
-INSTANT_EASY_TUNE=$(submit_split instant easy   "$INSTANT_RANDOM_TUNE")
-sleep 2
-INSTANT_HARD_TUNE=$(submit_split instant hard   "$INSTANT_EASY_TUNE")
+INSTANT_HARD_TUNE=$(submit_split instant hard   "$INSTANT_RANDOM_TUNE")
 
 echo ""
 echo "=== All jobs submitted ==="
