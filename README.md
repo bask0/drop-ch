@@ -160,7 +160,7 @@ The tests run on small synthetic inputs and need neither the dataset nor a GPU. 
 - **Data splits and unit conversions.**
 - **Configuration:** every experiment config resolves through the CLI, and no machine-specific paths are tracked outside `experiments/paths.yaml`.
 
-Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found. The test suite and ruff run on every push to `main` and on every pull request (see the badge above); there, the two dataset tests are skipped.
+Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found. The test suite and ruff run on every push to `main` and on every pull request (see the badge above); there, the tests that need the dataset or a local `experiments/paths.yaml` are skipped.
 
 ## Citation
 
