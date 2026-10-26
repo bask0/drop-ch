@@ -14,7 +14,7 @@ from tqdm import tqdm
 from zarr.codecs import BloscCodec, BloscShuffle
 
 from project.data.datamodule import GraphDataModule
-from project.nn.streamflow_net import StreamflowNet
+from project.nn.drop_model import DROP
 from project.utils.paths import get_path
 
 logger = logging.getLogger("SourceContribution")
@@ -104,8 +104,8 @@ def main(args) -> None:
 
     logger.info(f"Using checkpoint: {checkpoint_path}")
 
-    snet = StreamflowNet.load_from_checkpoint(checkpoint_path, map_location=device)
-    snet.eval()
+    drop_net = DROP.load_from_checkpoint(checkpoint_path, map_location=device)
+    drop_net.eval()
 
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -190,12 +190,12 @@ def main(args) -> None:
         batch_device.to(device)
 
         # Run model with full gradient graph (prec -> runoff_net -> q -> routing_net -> Q).
-        q = snet.runoff_net.chunked_forward(batch=batch_device, scale_output=True, subset=None)
-        q = snet.convert_q_to_m3s(q, batch_device)
-        e = snet.evaporation_net(
+        q = drop_net.runoff_net.chunked_forward(batch=batch_device, scale_output=True, subset=None)
+        q = drop_net.convert_q_to_m3s(q, batch_device)
+        e = drop_net.evaporation_net(
             T=batch_device.tair, area=batch_device.hru_area, water_freq=batch_device.water_freq, subset=None
         )
-        Q, *_ = snet.routing_net.route(batch=batch_device, q=q, e=e, subset=None)
+        Q, *_ = drop_net.routing_net.route(batch=batch_device, q=q, e=e, subset=None)
 
         if i == 0:
             ds_dummy_region = ds_dummy.isel(time=slice(0, time_warmup))

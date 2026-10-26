@@ -8,6 +8,6 @@ tuning_engine:
   log_dir: ${log_root}/routed/easy
 
 model:
-  class_path: project.nn.streamflow_net.StreamflowNet
+  class_path: project.nn.drop_model.DROP
   init_args:
     runoff_net_exp_dir: ${log_root}/prevah

@@ -1,5 +1,5 @@
 model:
-  class_path: project.nn.streamflow_net.StreamflowNet
+  class_path: project.nn.drop_model.DROP
   init_args:
     runoff_net_exp_dir: ${log_root}/prevah
     runoff_use_pretrained: true
