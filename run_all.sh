@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Cluster settings (account, GPU type, modules) from slurm/cluster.sh. Run from the repository root.
+source slurm/env.sh
+
 N_WORKERS=12
 JOB_NAME=sf_net
 
@@ -10,7 +13,7 @@ mkdir -p "$LOGDIR"
 SBATCH_ARGS=(
     --job-name="$JOB_NAME"
     --output="$LOGDIR/%j.out"
-    --gpus=nvidia_geforce_rtx_4090:1
+    --gpus="$GPU_SPEC"
     --time=1-00:00:00
 )
 
