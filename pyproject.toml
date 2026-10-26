@@ -90,6 +90,10 @@ kaleido = "*"
 # Local packages
 drop = { path = ".", editable = true }
 
+[tool.pixi.activation.env]
+# Ignore packages installed with `pip install --user` (~/.local), which would otherwise shadow the environment's.
+PYTHONNOUSERSITE = "1"
+
 [tool.pixi.tasks]
 export-environment = { description = "Export the current environment to environment.yaml", cmd = "pixi workspace export conda-environment > environment.yaml" }
 hooks-install = "pre-commit install"
