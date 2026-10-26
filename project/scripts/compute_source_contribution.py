@@ -15,13 +15,27 @@ from zarr.codecs import BloscCodec, BloscShuffle
 
 from project.data.datamodule import GraphDataModule
 from project.nn.streamflow_net import StreamflowNet
+from project.utils.paths import get_path
 
 logger = logging.getLogger("SourceContribution")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 argument_parser = ArgumentParser()
-argument_parser.add_argument("--optuna_tune_db", type=str, required=True, help="Path to the optuna tune database.")
+argument_parser.add_argument(
+    "--experiment",
+    type=str,
+    default="routed/random",
+    help="Experiment directory relative to `log_root` from experiments/paths.yaml, used to locate the tuning "
+    "database `<log_root>/<experiment>/tune/optuna.db`. Ignored if --optuna_tune_db is given. Default is "
+    "'routed/random'.",
+)
+argument_parser.add_argument(
+    "--optuna_tune_db",
+    type=str,
+    default=None,
+    help="Path to the optuna tune database. Overrides --experiment.",
+)
 argument_parser.add_argument(
     "--hru",
     type=int,
@@ -78,7 +92,10 @@ def main(args) -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    optuna_path = Path(args.optuna_tune_db)
+    if args.optuna_tune_db is None:
+        optuna_path = get_path("log_root") / args.experiment / "tune" / "optuna.db"
+    else:
+        optuna_path = Path(args.optuna_tune_db)
     log_dir = Path(
         optuna.load_study(study_name=None, storage=f"sqlite:///{optuna_path}").best_trial.user_attrs["log_dir"]
     )

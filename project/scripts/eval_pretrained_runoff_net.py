@@ -26,10 +26,12 @@ import numpy as np
 import torch
 import xarray as xr
 import yaml
+from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from project.data.datamodule import GraphDataModule
 from project.nn.streamflow_net import StreamflowNet
+from project.utils.paths import load_paths_config
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -81,7 +83,8 @@ def load_merged_config(config_path: str | Path) -> dict:
 
     Walks up the directory tree collecting config.yaml files until it reaches
     the 'experiments' root, then merges them from outermost to innermost so
-    that the most specific file wins.
+    that the most specific file wins. `${data_root}`/`${log_root}` are resolved
+    from experiments/paths.yaml, as in the CLI.
     """
     config_path = Path(config_path).resolve()
     configs: list[dict] = []
@@ -98,7 +101,9 @@ def load_merged_config(config_path: str | Path) -> dict:
     merged: dict = {}
     for cfg in reversed(configs):
         merged = deep_merge(merged, cfg)
-    return merged
+
+    merged = deep_merge(load_paths_config(), merged)
+    return OmegaConf.to_container(OmegaConf.create(merged), resolve=True)  # type: ignore[return-value]
 
 
 def data_kwargs_from_config(cfg: dict) -> dict:

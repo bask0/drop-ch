@@ -25,7 +25,7 @@ Designed to capture spatial and temporal dynamics of runoff generation and flow 
 │   ├── scripts/                  # Standalone data download/preprocessing/analysis scripts
 │   └── utils/                    # Metrics, plotting, normalization, and other shared utilities
 ├── experiments/                  # Per-experiment Hydra/LightningCLI configs
-│   ├── paths.yaml                 # Your data/log root directories (edit this)
+│   ├── paths.example.yaml        # Template for your local paths.yaml (data/log directories)
 │   ├── base_config.yaml          # Shared defaults
 │   └── {instant,lumped,prevah,routed}/
 │       ├── config.yaml           # Model-specific config
@@ -39,13 +39,6 @@ Designed to capture spatial and temporal dynamics of runoff generation and flow 
 └── pixi.lock                     # Locked environment
 ```
 
-All experiment configs derive their data and output paths from `experiments/paths.yaml` via `${data_root}`/`${log_root}` interpolation — it's the only file you need to edit to run on your own machine:
-
-```yaml
-data_root: /path/to/data   # directory containing harmonized_hru_data.zarr
-log_root: /path/to/logs    # directory for experiment outputs (checkpoints, optuna DBs, logs)
-```
-
 ## Setup
 
 This project uses [pixi](https://pixi.sh) for environment management.
@@ -55,6 +48,22 @@ git clone <this-repo-url>
 cd streamflow-net
 pixi install
 ```
+
+### Paths
+
+All machine-specific paths live in `experiments/paths.yaml`, which is not tracked by git. Create it from the template and fill in your directories:
+
+```bash
+cp experiments/paths.example.yaml experiments/paths.yaml
+```
+
+```yaml
+data_root: /path/to/data          # directory containing harmonized_hru_data.zarr
+log_root: /path/to/logs           # experiment outputs (checkpoints, Optuna databases, logs, predictions)
+hru_file: /path/to/hrus.gpkg      # HRU polygons, used for plotting
+```
+
+Experiment configs derive their paths from it via `${data_root}`/`${log_root}` interpolation; scripts, plotting and notebooks read it through `project/utils/paths.py`. The remaining keys are only needed to rebuild the dataset from raw data (`project/scripts/download_data.py`, `project/scripts/preprocessing.py`) or for the analysis notebooks.
 
 ## Usage
 
@@ -92,4 +101,4 @@ pixi run plotly_get_chrome
 pixi run pytest
 ```
 
-The smoke test in `tests/test_pipeline.py` requires the processed HRU dataset (path configured at the top of the file) and is skipped automatically if it isn't found.
+The tests run on synthetic data and need neither the dataset nor a GPU. Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found.

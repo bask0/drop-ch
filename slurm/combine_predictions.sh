@@ -10,8 +10,7 @@
 
 module load eth_proxy  # remove/replace if not on ETH Euler
 
+# Reads predictions from `log_root` and the dataset from `data_root` (experiments/paths.yaml), and writes
+# <log_root>/predictions_combined.zarr. Pass --root/--base_path/--out_path to override.
 pixi run python project/scripts/combine_predictions.py \
-    --root /path/to/logs/ \
-    --base_path /path/to/data/harmonized_hru_data.zarr \
-    --out_path /path/to/logs/predictions_combined.zarr \
     --exclude_dirs prevah routedfinal

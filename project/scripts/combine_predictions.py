@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 from zarr.codecs import BloscCodec, BloscShuffle
 
+from project.utils.paths import dataset_path, get_path
 from project.utils.unit_conversion import convert_m3s_to_mmd, convert_mmd_to_m3s
 
 logger = logging.getLogger("combine_predictions")
@@ -183,14 +184,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--root",
         type=str,
-        required=True,
-        help="Root directory to search for preds.zarr files.",
+        default=None,
+        help="Root directory to search for preds.zarr files. Default is `log_root` from experiments/paths.yaml.",
     )
     parser.add_argument(
         "--base_path",
         type=str,
-        required=True,
-        help="Path to the base dataset containing area information.",
+        default=None,
+        help="Path to the base dataset containing area information. Default is the harmonized dataset in "
+        "`data_root` from experiments/paths.yaml.",
     )
     parser.add_argument(
         "--exclude_dirs",
@@ -202,11 +204,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_path",
         type=str,
-        required=True,
-        help="Path to save the combined dataset.",
+        default=None,
+        help="Path to save the combined dataset. Default is `<log_root>/predictions_combined.zarr`.",
     )
 
     args = parser.parse_args()
+    args.root = args.root or str(get_path("log_root"))
+    args.base_path = args.base_path or str(dataset_path())
+    args.out_path = args.out_path or str(get_path("log_root") / "predictions_combined.zarr")
 
     logger.info(f"Combining predictions from root: {args.root}")
 
