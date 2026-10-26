@@ -38,6 +38,7 @@ MNIST/
 # === Config files and experiment artifacts ===
 # Machine-specific settings, created from the committed *.example.* templates.
 experiments/paths.yaml
+slurm/cluster.sh
 *.yaml~
 *.bak
 *.tmp
