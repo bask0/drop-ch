@@ -159,8 +159,7 @@ def load_hillshade(
     """
 
     hillshade_dir = Path(hillshade_dir)
-    if not hillshade_dir.exists():
-        FileNotFoundError(f"Hillshade directory {hillshade_dir} does not exist.")
+    hillshade_dir.mkdir(parents=True, exist_ok=True)
 
     dem_path = Path(dem_path)
 

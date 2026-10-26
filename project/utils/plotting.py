@@ -48,7 +48,7 @@ def despine(ax: Axes, which: str = "L", remove_ticks: bool = False) -> None:
     elif which == "L":
         spines = ["top", "right"]
     else:
-        NotImplementedError(f"`which`={which} not implemented.")
+        raise NotImplementedError(f"`which`={which} not implemented.")
 
     ax.spines[spines].set_visible(False)
 
