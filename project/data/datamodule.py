@@ -102,7 +102,7 @@ class HRUData(InMemoryDataset):
         hru_samples: list[int] | None = None,
         use_prevah: bool = False,
         aggregate_catchments: bool = False,
-        transform: None | Callable = None,
+        transform: Callable | None = None,
     ):
         """Initialize HRUData class.
 

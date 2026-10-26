@@ -79,9 +79,9 @@ def enrich(ds: xr.Dataset | xr.DataArray, hrus: gpd.GeoDataFrame, variables: str
             ds = ds.to_dataset(name=variables[0])
     elif isinstance(variables, list):
         if isinstance(ds, xr.DataArray):
-            raise ValueError("If 'ds' is a DataArray, 'variables' must be a string.")
+            raise TypeError("If 'ds' is a DataArray, 'variables' must be a string.")
     else:
-        raise ValueError("'variables' must be a string or a list of strings.")
+        raise TypeError("'variables' must be a string or a list of strings.")
 
     hrus = hrus.copy()
 

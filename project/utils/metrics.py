@@ -195,7 +195,7 @@ def _get_xflow_bias(obs: xr.DataArray, mod: xr.DataArray, dim: str, q_low: float
 def _flv(obs: xr.DataArray, mod: xr.DataArray, dim: str) -> xr.DataArray:
 
     if not isinstance(dim, str):
-        raise ValueError("`flv` not implemented for more than on dimension.")
+        raise TypeError("`flv` is only implemented for a single dimension, given as a string.")
 
     flv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, q_low=0.0, q_up=0.05).compute()
 
@@ -205,7 +205,7 @@ def _flv(obs: xr.DataArray, mod: xr.DataArray, dim: str) -> xr.DataArray:
 def _fhv(obs: xr.DataArray, mod: xr.DataArray, dim: str) -> xr.DataArray:
 
     if not isinstance(dim, str):
-        raise ValueError("`fhv` not implemented for more than on dimension.")
+        raise TypeError("`fhv` is only implemented for a single dimension, given as a string.")
 
     fhv = _get_xflow_bias(obs=obs, mod=mod, dim=dim, q_low=0.98, q_up=1.00).compute()
 

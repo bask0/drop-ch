@@ -205,11 +205,11 @@ class CLI(LightningCLI):
             object: An instance of the specified class, initialized with the provided arguments.
 
         Raises:
-            ValueError: If cfg is not a dictionary.
+            TypeError: If cfg is not a dictionary.
         """
 
         if not isinstance(cfg, dict):
-            raise ValueError("Expected dict with keys 'class_path' and optional 'init_args'.")
+            raise TypeError("Expected dict with keys 'class_path' and optional 'init_args'.")
 
         class_path = cfg["class_path"]
         init_args = cfg.get("init_args", {})
