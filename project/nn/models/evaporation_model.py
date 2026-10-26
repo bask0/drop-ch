@@ -61,9 +61,6 @@ class EvaporationModel(torch.nn.Module):
         if not self.return_m3s:
             return e_mmd
 
-        # TODO: Check if this conversion was correct.
-        # e_m3s = e_mmd / 1000 * area_m2 * water_freq[:, None, None] / (24 * 60 * 60)  # Convert mm/d to m³/s
-
         e_m3s = convert_mmd_to_m3s(e_mmd, area[:, None, None] * water_freq[:, None, None])  # Convert mm/d to m³/s
 
         return e_m3s
