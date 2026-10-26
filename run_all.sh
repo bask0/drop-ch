@@ -4,7 +4,7 @@
 source slurm/env.sh
 
 N_WORKERS=12
-JOB_NAME=sf_net
+JOB_NAME=drop
 
 LOGDIR="slurm_logs/$JOB_NAME"
 

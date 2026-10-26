@@ -7,7 +7,7 @@ source slurm/env.sh
 # Submits a single, fast, low-resource tune.py run (2 Optuna trials, 1 epoch each, on a
 # tiny data subset — see experiments/fast_dev_run_config.yaml).
 
-JOB_NAME=sf_net_example
+JOB_NAME=drop_example
 
 mkdir -p "slurm_logs/$JOB_NAME"
 

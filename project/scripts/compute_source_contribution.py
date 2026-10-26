@@ -55,7 +55,7 @@ argument_parser.add_argument(
     type=int,
     required=False,
     default=365,
-    help="Warmup time (in timesteps) before starting to compute gradients. Default is 500.",
+    help="Warmup time (in timesteps) before starting to compute gradients. Default is 365.",
 )
 argument_parser.add_argument(
     "--date_start",

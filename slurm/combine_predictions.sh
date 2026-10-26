@@ -14,10 +14,12 @@
 source slurm/env.sh
 
 if [ -z "$SLURM_JOB_ID" ]; then
+    mkdir -p slurm_logs
     exec sbatch ${CPU_PARTITION:+--partition="$CPU_PARTITION"} "$0" "$@"
 fi
 
 cluster_setup
 
 pixi run python project/scripts/combine_predictions.py \
-    --exclude_dirs prevah routedfinal
+    --exclude_dirs prevah \
+    "$@"
