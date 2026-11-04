@@ -70,7 +70,7 @@ out_path = args.out_path or str(get_path("log_root") / "predictions_compressed.z
 ds = xr.open_zarr(in_path)
 
 ds = ds[[var for var in ds.data_vars if not str(var).endswith("mmd")]]
-ds = ds.drop_vars(["Q_emulated", "Q_instant_pred_m3s"])
+ds = ds.drop_vars(["Q_emulated", "Q_instant_pred_m3s"], errors="ignore")
 
 encoding = get_encoding(ds, clevel=7)
 
