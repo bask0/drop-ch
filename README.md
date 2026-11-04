@@ -9,8 +9,6 @@
 
 ## Description
 
-**Author:** Basil Kraft
-
 DROP is a data-driven neural network architecture for modeling and routing streamflow in distributed hydrological systems.
 
 Designed to capture spatial and temporal dynamics of runoff generation and flow routing, DROP leverages deep learning to simulate hydrological behavior across catchments with flexible, modular components. In the code, the model is the class `DROP` in `project/nn/drop_model.py`.
@@ -18,7 +16,7 @@ Designed to capture spatial and temporal dynamics of runoff generation and flow 
 This repository contains the code accompanying a paper on DROP.
 
 > [!NOTE]
-> The reference to the paper will be added here once it is published.
+> If your published work uses or builds on this code, please cite the paper (see [Citation](#citation)). The reference will be added once the paper is published.
 
 This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
