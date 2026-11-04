@@ -21,5 +21,5 @@ fi
 cluster_setup
 
 pixi run python project/scripts/combine_predictions.py \
-    --exclude_dirs prevah \
+    --exclude_dirs prevah fast_dev_run \
     "$@"
