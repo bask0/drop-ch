@@ -198,7 +198,7 @@ if __name__ == "__main__":
         "--exclude_dirs",
         type=str,
         nargs="*",
-        default=["prevah"],
+        default=["prevah", "fast_dev_run"],
         help="List of directory names to exclude from the search.",
     )
     parser.add_argument(
