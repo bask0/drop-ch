@@ -31,6 +31,10 @@ logs_test
 checkpoints/
 **/checkpoints/
 MNIST/
+*.ckpt
+
+# === Datasets and predictions ===
+*.zarr
 
 # === Optuna DB files ===
 **/optuna.db
