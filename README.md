@@ -2,7 +2,7 @@
 
 # DROP
 
-[![Tests](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/streamflow-net/actions/workflows/tests.yml)
+[![Tests](https://github.com/bask0/drop-ch/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/drop-ch/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
@@ -24,7 +24,7 @@ This repository is shared to make the methods and results of the paper transpare
 
 ## Reproducing the published results
 
-The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/streamflow-net/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README:
+The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/drop-ch/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README, which still uses the old project name (Streamflow-Net) and directory name (`streamflow-net`, now `drop-ch`):
 
 ```bash
 git checkout v0.2.0-revision
@@ -72,8 +72,8 @@ pixi install
 This project uses [pixi](https://pixi.sh) for environment management.
 
 ```bash
-git clone https://github.com/bask0/streamflow-net.git
-cd streamflow-net
+git clone https://github.com/bask0/drop-ch.git
+cd drop-ch
 pixi install
 pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 ```
@@ -159,7 +159,7 @@ bash slurm/example_minimal.sh
 
 After the runs, two post-processing steps prepare the inputs of the notebooks:
 
-- `bash slurm/combine_predictions.sh` combines the cross-validation predictions of all experiments into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
+- `bash slurm/combine_predictions.sh` combines the cross-validation predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
 - `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb` and `analysis/sensitivity.ipynb`.
 
 The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Start Jupyter in the pixi environment with:
