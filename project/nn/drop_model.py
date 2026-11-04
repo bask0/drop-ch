@@ -132,8 +132,9 @@ class DROP(pl.LightningModule):
             runoff_lr_warmup_epochs (int, optional): Number of epochs over which the runoff LR ramps
                 from runoff_lr / runoff_lr_div_factor to runoff_lr. After this, LR stays constant.
                 Default is 5.
-            use_instant_routing (bool, optional): If True, training and validation use instantaneous routing
-                (area-weighted summation, no temporal buffering). Water frequency constraint is disabled.
+            use_instant_routing (bool, optional): If True, training, validation and the saved prediction use
+                instantaneous routing (area-weighted summation, no temporal buffering). Water frequency constraint
+                is disabled.
                 Default is False.
             evaporation_enabled (bool, optional): If True, enables evaporation mnodule for lake surfaces.
                 Default is False.
@@ -552,6 +553,9 @@ class DROP(pl.LightningModule):
 
         Q, S, R, T, D, k, q, e, _retention = self.inference_forward(batch=batch)
         _, Q_instant = self.instant_forward(batch=batch)
+
+        if self.use_instant_routing:
+            Q = Q_instant
 
         k_hops = batch.k_hops[0].item()  # type: ignore
 
