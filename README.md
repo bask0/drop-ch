@@ -22,10 +22,13 @@ This repository is shared to make the methods and results of the paper transpare
 
 ## Reproducing the published results
 
-The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/drop-ch/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README, which still uses the old project name (Streamflow-Net) and directory name (`streamflow-net`, now `drop-ch`):
+The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/drop-ch/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README, which still uses the old project name (Streamflow-Net) and directory name (`streamflow-net`, now `drop-ch`).
+
+Use a separate clone for this. The tagged version tracks `experiments/paths.yaml`, so checking it out in an existing clone overwrites your own file, and switching back deletes it:
 
 ```bash
-git checkout v0.2.0-revision
+git clone --branch v0.2.0-revision https://github.com/bask0/drop-ch.git drop-ch-revision
+cd drop-ch-revision
 pixi install
 ```
 
@@ -54,7 +57,7 @@ pixi install
 ├── tests/                        # Pytest suite
 ├── .github/workflows/            # CI: ruff and tests on every push to main and every pull request
 ├── tune.py                       # Entry point: hyperparameter tuning
-├── xval.py                       # Entry point: cross-validation
+├── xval.py                       # Entry point: predictions of the best tuned model
 ├── run_all.sh                    # Submits the full tune+xval job graph across experiments/splits
 ├── pyproject.toml                # Package metadata and pixi environment/dependencies
 └── pixi.lock                     # Locked environment
@@ -84,6 +87,15 @@ All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`.
 > The download location of the dataset will be added here once the paper is published.
 
 Alternatively, it can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
+
+The dataset is built from third-party data, which is not part of this repository and remains subject to the terms of its providers. Check those terms before using or redistributing the data:
+
+- **Meteorological forcing:** MeteoSwiss gridded precipitation and temperature (RhiresD, TabsD) and ERA5-Land.
+- **Simulated runoff:** PREVAH.
+- **Observed discharge:** FOEN and, for gauges outside Switzerland, other sources.
+- **Catchment attributes:** MERIT Hydro, SoilGrids, CORINE land cover, a dam inventory and a river network.
+
+The analysis notebooks additionally use CAMELS-CH.
 
 ### Paths
 
@@ -126,7 +138,7 @@ All scripts load it automatically. Run them with `bash` from the repository root
 
 ### Running
 
-Each experiment runs hyperparameter tuning first, then cross-validation with the best hyperparameters. `prevah` is only tuned: `routed` and `instant` load its best model from `<log_root>/prevah` as their pretrained runoff model, so it has to be tuned before them.
+Each experiment runs hyperparameter tuning with `tune.py` first. `xval.py` then saves the predictions of the best tuning checkpoint: despite its name, it does not retrain the model, and all experiments use a single fold. `prevah` is only tuned: `routed` and `instant` load its best model from `<log_root>/prevah` as their pretrained runoff model, so it has to be tuned before them.
 
 ```bash
 # 1. Pretrain the runoff model (no splits).
@@ -141,7 +153,7 @@ pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yam
 
 Adding `-c experiments/fast_dev_run_config.yaml` runs a tiny version (2 trials, 1 epoch, short sequences) to check the setup. It writes to `<log_root>/fast_dev_run/`, so it never overwrites the results of real runs.
 
-The analysis notebooks `analysis/prevah_vs_runoff.ipynb` (comparison with PREVAH) and `analysis/hp_tune.ipynb` additionally need the cross-validation of `prevah`, which the other experiments do not:
+The analysis notebooks `analysis/prevah_vs_runoff.ipynb` (comparison with PREVAH) and `analysis/hp_tune.ipynb` additionally need the `xval.py` run of `prevah`, which the other experiments do not:
 
 ```bash
 pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yaml -c experiments/prevah/config.yaml
@@ -153,11 +165,14 @@ On a SLURM cluster, `bash run_all.sh` submits all experiments and splits in the 
 bash slurm/example_minimal.sh
 ```
 
+> [!WARNING]
+> `run_all.sh` and `experiments/*/run.sh` use `--tuning_engine.overwrite=True`, which deletes the existing results of these experiments under `<log_root>`.
+
 ### Results and figures
 
 After the runs, two post-processing steps prepare the inputs of the notebooks:
 
-- `bash slurm/combine_predictions.sh` combines the cross-validation predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
+- `bash slurm/combine_predictions.sh` combines the `xval.py` predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
 - `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb` and `analysis/sensitivity.ipynb`.
 
 The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Start Jupyter in the pixi environment with:
