@@ -32,6 +32,7 @@ from sklearn.neural_network import MLPRegressor
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
+from project.utils.dataset_metadata import add_metadata
 from project.utils.paths import dataset_path, get_path
 
 warnings.filterwarnings("ignore", module="pyproj", category=UserWarning)
@@ -1028,6 +1029,8 @@ for k, v in tqdm(upstream_neighbors.items(), total=len(upstream_neighbors), ncol
 
 ds["q_prevah_m3s"] = ds["q_prevah_mmd"] * ds["area"] / 60 / 60 / 24 * 1000
 ds["Q_obs_mmd"] = ds["Q_obs_m3s"] / ds["upstream_area"] * 60 * 60 * 24 / 1000
+
+ds = add_metadata(ds)
 
 
 print("Writing data")
