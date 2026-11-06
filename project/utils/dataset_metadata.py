@@ -133,12 +133,22 @@ GLOBAL_ATTRS = {
     "comment": (
         "Data aggregated to hydrological drainage units (HRUs) covering hydrological Switzerland. Gridded data were "
         "aggregated by the spatial average within each HRU, the circular mean for aspect, and the nearest neighbour "
-        "where no grid cell had its centre within an HRU. The third-party data remain subject to the terms of their "
-        "providers."
+        "where no grid cell had its centre within an HRU."
     ),
     "references": (
         "Kraft, B., et al.: DROP: A scalable deep learning approach for runoff simulation and river routing, Water "
         "Resources Research, 2026."
+    ),
+    "license": (
+        "Open Database License (ODbL) 1.0, https://opendatacommons.org/licenses/odbl/1-0/. Required because the "
+        "dataset contains data derived from MERIT Hydro, which is licensed under ODbL 1.0 or CC BY-NC 4.0."
+    ),
+    "acknowledgement": (
+        "Contains modified data from the sources listed in the `source` and `references` attributes of each variable. "
+        "Source: MeteoSwiss. Source: FOEN. Source: SFOE. Contains modified Copernicus Climate Change Service "
+        "information (ERA5-Land) and modified Copernicus Land Monitoring Service information (CORINE Land Cover, "
+        "EU-Hydro), produced with funding by the European Union. Neither the European Union nor the data providers "
+        "endorse this dataset."
     ),
     "history": "Created with project/scripts/preprocessing.py of https://github.com/bask0/drop-ch.",
 }
