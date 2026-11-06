@@ -21,6 +21,7 @@ PATH_KEYS = {
     "data_root": "Root directory containing the harmonized HRU dataset (harmonized_hru_data.zarr).",
     "log_root": "Root directory for experiment logs and outputs (checkpoints, Optuna databases, predictions).",
     "hru_file": "Path to the HRU geopackage file (used for plotting and written by preprocessing).",
+    "river_file": "Path to the river network geopackage file (notebooks only).",
     "raw_data_root": "Project raw data directory with raw/, processed/ and intermediate/ (preprocessing only).",
     "geodata_root": "Directory with the MERIT, SoilGrids and CORINE geodata (preprocessing only).",
     "meteoswiss_root": "MeteoSwiss gridded data archive (preprocessing only).",

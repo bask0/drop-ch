@@ -16,7 +16,7 @@ hru_file: /path/to/data/hrus/hrus.gpkg
 
 # --- Raw data (needed to rebuild the dataset with project/scripts/{download_data,preprocessing}.py) ------------------
 
-# Project raw data with raw/, processed/ and intermediate/ subdirectories. Also read by the analysis notebooks.
+# Project raw data with raw/, processed/ and intermediate/ subdirectories.
 raw_data_root: /path/to/raw_data
 # Geodata with merit/, soilgrids/ and corine/ subdirectories.
 geodata_root: /path/to/geodata
@@ -29,3 +29,5 @@ era5land_root: /path/to/ERA5-Land/processed
 
 # Combined predictions of all models (predictions_combined.zarr), read by the analysis notebooks.
 predictions_file: /path/to/predictions_combined.zarr
+# River network (rivernet.gpkg), drawn on the maps of the analysis notebooks.
+river_file: /path/to/rivernet.gpkg
