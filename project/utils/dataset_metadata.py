@@ -407,6 +407,65 @@ for land_cover in ["artificial", "agriculture", "forests", "shrubs", "barren", "
     )
 
 
+# Columns of the HRU polygons (`hru_file`) that are not variables of the dataset.
+FOEN_COLUMNS = [
+    "TEILEZGNR",
+    "H1",
+    "H2",
+    "Nebenarm",
+    "InterneSen",
+    "Gewaessern",
+    "TEZGNR40",
+    "TEZGNR150",
+    "TEZGNR1000",
+    "Gebietsaus",
+    "SEE",
+    "FLUSSGB",
+]
+HRU_COLUMN_DESCRIPTIONS = {
+    "EZGNR": "HRU ID, as `hru` in the dataset. Source: " + DU_SOURCE + ".",
+    "origin": "Origin of the polygon: 'ezg' for FOEN drainage units, 'camels' for CAMELS-CH catchments.",
+    "Shape_Area": "Polygon area (m2).",
+    **dict.fromkeys(FOEN_COLUMNS, "Attribute of the FOEN drainage units; see the FOEN product documentation."),
+}
+
+
+def hru_layer_metadata(columns: list[str]) -> dict[str, str]:
+    """Return the layer metadata of the HRU polygons: global attributes and a description per column.
+
+    The descriptions of columns that are also variables of the dataset are built from their attributes; the references
+    of all columns are collected in `data_references`.
+    """
+
+    metadata = {
+        **GLOBAL_ATTRS,
+        "title": "HRU polygons of the harmonized HRU dataset for DROP",
+        "comment": (
+            "Polygons of the hydrological drainage units (HRUs) covering hydrological Switzerland, with their static "
+            "attributes. FOEN drainage units within Switzerland, CAMELS-CH catchments outside of Switzerland."
+        ),
+    }
+
+    reference_texts = [REFERENCES[key] for key in DU]
+    for column in columns:
+        if column in VARIABLE_ATTRS:
+            attrs = VARIABLE_ATTRS[column]
+            units = f" ({attrs['units']})" if "units" in attrs else ""
+            source = f" Source: {attrs['source']}." if "source" in attrs else ""
+            comment = f" {attrs['comment']}" if "comment" in attrs else ""
+            metadata[f"description_{column}"] = f"{attrs['long_name']}{units}.{source}{comment}"
+            reference_texts += [REFERENCES[key] for key in REFERENCES if REFERENCES[key] in attrs.get("references", "")]
+        elif column in HRU_COLUMN_DESCRIPTIONS:
+            metadata[f"description_{column}"] = HRU_COLUMN_DESCRIPTIONS[column]
+        else:
+            warnings.warn(f"No metadata defined for column {column}.", stacklevel=2)
+
+    unique_references = list(dict.fromkeys(reference_texts))
+    metadata["data_references"] = " ".join(f"{i}) {text}" for i, text in enumerate(unique_references, start=1))
+
+    return metadata
+
+
 def add_metadata(ds: xr.Dataset) -> xr.Dataset:
     """Set the global attributes and the attributes of each known variable, and warn about variables without any."""
     ds.attrs.update(GLOBAL_ATTRS)

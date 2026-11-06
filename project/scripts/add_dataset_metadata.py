@@ -3,7 +3,7 @@
 Only the attributes are changed, in place; the data is not touched, so the dataset does not have to be rebuilt.
 Run it on a copy if the original has to stay unchanged:
 
-    pixi run python project/scripts/add_dataset_metadata.py --path /path/to/harmonized_hru_data.zarr
+    pixi run python project/scripts/add_dataset_metadata.py --path <copy of harmonized_hru_data.zarr>
 """
 
 import warnings

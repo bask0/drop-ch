@@ -4,7 +4,14 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from project.utils.dataset_metadata import GLOBAL_ATTRS, REFERENCES, VARIABLE_ATTRS, add_metadata, references
+from project.utils.dataset_metadata import (
+    GLOBAL_ATTRS,
+    REFERENCES,
+    VARIABLE_ATTRS,
+    add_metadata,
+    hru_layer_metadata,
+    references,
+)
 
 
 def test_every_variable_has_a_long_name():
@@ -35,3 +42,17 @@ def test_add_metadata_sets_attributes_and_warns_about_unknown_variables():
     assert ds["prec"].attrs == VARIABLE_ATTRS["prec"]
     assert ds["hru"].attrs == VARIABLE_ATTRS["hru"]
     assert ds["unknown"].attrs == {}
+
+
+def test_hru_layer_metadata_describes_columns_and_collects_their_references():
+    """Each known column gets a description, and the references of all columns are listed once."""
+
+    with pytest.warns(UserWarning, match="unknown"):
+        metadata = hru_layer_metadata(["EZGNR", "slope_mean", "aspect_mean", "unknown"])
+
+    assert metadata["license"] == GLOBAL_ATTRS["license"]
+    assert metadata["description_EZGNR"].startswith("HRU ID")
+    assert metadata["description_slope_mean"].startswith("Slope (mean) (1).")
+    assert "description_unknown" not in metadata
+    assert metadata["data_references"].count(REFERENCES["horn_1981"]) == 1
+    assert REFERENCES["foen_2010"] in metadata["data_references"]
