@@ -318,13 +318,13 @@ class HRUData(InMemoryDataset):
             idx (int): Index of the HRU sample to retrieve.
 
         Returns:
-            HRUSample: A dataclass containing static and dynamic features, observed and emulated streamflow,
+            HRUSample: A dataclass containing static and dynamic features, observed and PREVAH streamflow,
                 precipitation, air temperature, HRU area, lake indicator, water frequency, and the time slice used for
                 temporal features.
 
         Notes:
             - The method extracts both static and dynamic features for the specified HRU.
-            - Observed and emulated streamflow, as well as other time-dependent features, are sliced according to
+            - Observed and PREVAH streamflow, as well as other time-dependent features, are sliced according to
                 the relevant time window.
             - Additional HRU-specific attributes such as area, lake status, and water frequency are included.
             - The time slice is serialized as a list for compatibility.
@@ -338,8 +338,6 @@ class HRUData(InMemoryDataset):
         d = assert_not_none(self.get_dyn_features(hru=hru_idx))
         # Get observed streamflow
         Q_obs = assert_not_none(self.get_q_obs(hru=hru_idx))
-        # Get emulated streamflow
-        Q_emulated = assert_not_none(assert_not_none(self.get_q_emulated(hru=hru_idx)))
         # Get PREVAH streamflow
         q_prevah = assert_not_none(self.get_q_prevah(hru=hru_idx))
         # Get precipitation and air temperature
@@ -352,11 +350,10 @@ class HRUData(InMemoryDataset):
         water_freq = assert_not_none(self.get_ds_feature("water_freq", hru=hru_idx)).type(x.dtype)
 
         # Determine valid time slice for this HRU
-        time_slice = self.get_time_slice(target=Q_emulated)
+        time_slice = self.get_time_slice(target=torch.ones_like(q_prevah))
 
         # Slice all temporal features
         Q_obs = Q_obs[..., time_slice, :]
-        Q_emulated = Q_emulated[..., time_slice, :]
         q_prevah = q_prevah[..., time_slice, :]
         d = d[..., time_slice, :]
         prec = prec[..., time_slice, :]
@@ -383,7 +380,7 @@ class HRUData(InMemoryDataset):
         """Construct and return a PyTorch Geometric Data object representing a subgraph for a given catchment index.
 
         The method extracts a k-hop subgraph around the selected HRU, gathers static and dynamic features,
-        observational and emulated discharge data, meteorological variables, and various HRU attributes. It also
+        observational and PREVAH discharge data, meteorological variables, and various HRU attributes. It also
         computes edge indices for graph connectivity, including downstream adjacency and self-loops, and serializes
         the relevant time slice for the target HRU.
 
@@ -417,8 +414,6 @@ class HRUData(InMemoryDataset):
         xy_coords = assert_not_none(self.darray2tensor(self.get_coords(hru=subset)))
         # Get observed streamflow for the subgraph nodes
         Q_obs = assert_not_none(self.get_q_obs(hru=subset))
-        # Get emulated streamflow for the subgraph nodes
-        Q_emulated = assert_not_none(self.get_q_emulated(hru=subset))
         # Get PREVAH streamflow for the subgraph nodes
         q_prevah = assert_not_none(self.get_q_prevah(hru=subset))
         # Get precipitation for the subgraph nodes
@@ -437,7 +432,6 @@ class HRUData(InMemoryDataset):
 
         # Slice temporal features
         Q_obs = Q_obs[:, time_slice, :]
-        Q_emulated = Q_emulated[:, time_slice, :]
         q_prevah = q_prevah[:, time_slice, :]
         d = d[:, time_slice, :]
         prec = prec[:, time_slice, :]
@@ -463,7 +457,6 @@ class HRUData(InMemoryDataset):
             d=d,
             xy_coords=xy_coords,
             y=Q_obs,
-            q_emulated=Q_emulated,
             q_prevah=q_prevah,
             prec=prec,
             tair=tair,
@@ -742,20 +735,6 @@ class HRUData(InMemoryDataset):
         """
 
         x = self.ds[[self.target]].isel(**isel)
-
-        return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
-
-    def get_q_emulated(self, **isel) -> Tensor | None:
-        """Retrieve emulated streamflow (Q_emulated) for the given selection.
-
-        Args:
-            **isel: Index selection arguments for xarray.
-
-        Returns:
-            Tensor | None: The selected emulated discharge as a tensor.
-        """
-
-        x = self.ds[["Q_emulated"]].isel(**isel)
 
         return self.darray2tensor(x.to_array("variable").transpose(..., "time", "variable").astype("float32"))
 
