@@ -63,17 +63,6 @@ REFERENCES = {
         "PREVAH and its pre- and post-processing-tools, Environmental Modelling & Software, 24, 1209–1222, "
         "https://doi.org/10.1016/j.envsoft.2009.04.001, 2009."
     ),
-    "kraft_2025": (
-        "Kraft, B., Schirmer, M., Aeberhard, W. H., Zappa, M., Seneviratne, S. I., and Gudmundsson, L.: CH-RUN: a "
-        "deep-learning-based spatially contiguous runoff reconstruction for Switzerland, Hydrology and Earth System "
-        "Sciences, 29, 1061–1082, https://doi.org/10.5194/hess-29-1061-2025, 2025."
-    ),
-    "haddad_2025": (
-        "Haddad, Y. Y., Gudmundsson, L., Savelsberg, J., Garrison, J. B., Raycheva, E., Wechsler, T., Zappa, M., "
-        "Hug, G., and Seneviratne, S. I.: Recent climate impacts on run-of-river hydropower and electricity systems "
-        "planning in Switzerland, Environmental Research Letters, 20, 084020, "
-        "https://doi.org/10.1088/1748-9326/ade4df, 2025."
-    ),
     "schwarb_2000": (
         "Schwarb, M.: The alpine precipitation climate: evaluation of a high-resolution analysis scheme using "
         "comprehensive rain-gauge data, Doctoral Thesis, ETH Zurich, https://doi.org/10.3929/ethz-a-004121274, 2000."
@@ -166,7 +155,7 @@ DISCHARGE = (
     "arpa_lombardia_2025",
     "arpa_piemonte_2025",
 )
-PREVAH = ("viviroli_2009", "kraft_2025", "haddad_2025")
+PREVAH = ("viviroli_2009",)
 TOPOGRAPHY = ("yamazaki_2019", "horn_1981", "barnes_2016")
 DU_SOURCE = "FOEN; CAMELS-CH outside of Switzerland"
 DISCHARGE_SOURCE = "HydroCH, compiled from national and regional providers"
