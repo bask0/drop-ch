@@ -4,6 +4,17 @@
 
 [![Tests](https://github.com/bask0/drop-ch/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/drop-ch/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<!-- Once the paper is published, uncomment and add the links:
+[![Paper](https://img.shields.io/badge/Paper-JOURNAL%20(YEAR)-blue.svg)](https://doi.org/PAPER_DOI)
+[![Data](https://img.shields.io/badge/Data-Dataset-green.svg)](https://doi.org/DATA_DOI)
+-->
+
+<!-- Once the paper is published, uncomment and add a figure from the paper:
+<figure>
+  <img src="./analysis/figures/FIGURE.png" alt="DROP" style="width:70%">
+  <figcaption></br>Fig. N from AUTHORS (YEAR): CAPTION.</figcaption>
+</figure>
+-->
 
 </div>
 
