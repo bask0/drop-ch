@@ -20,18 +20,6 @@ This repository contains the code accompanying a paper on DROP.
 
 This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
-## Reproducing the published results
-
-The results in the paper were produced with the code at tag [`v0.2.0-revision`](https://github.com/bask0/drop-ch/tree/v0.2.0-revision), including the environment locked in its `pixi.lock`. Later versions rename the model (from `StreamflowNet` to `DROP`) and the package, reorganize the configuration, and may use different dependency versions, so runs and checkpoints are not interchangeable between them and the tagged version. To reproduce the published results, use the tagged version and follow its README, which still uses the old project name (Streamflow-Net) and directory name (`streamflow-net`, now `drop-ch`).
-
-Use a separate clone for this. The tagged version tracks `experiments/paths.yaml`, so checking it out in an existing clone overwrites your own file, and switching back deletes it:
-
-```bash
-git clone --branch v0.2.0-revision https://github.com/bask0/drop-ch.git drop-ch-revision
-cd drop-ch-revision
-pixi install
-```
-
 ## Project Structure
 
 ```bash

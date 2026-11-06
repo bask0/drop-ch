@@ -1,6 +1,6 @@
 """Preprocess the raw geospatial data into the harmonized HRU dataset.
 
-Includes zonal statistics, reprojection, reading RDS files, and extracting features from raster data.
+Includes zonal statistics, reprojection, and extracting features from raster data.
 
 All input and output paths are configured in experiments/paths.yaml (`raw_data_root`, `geodata_root`,
 `meteoswiss_root` and `era5land_root` for inputs; the dataset is written to `data_root` and the HRU polygons to
@@ -8,7 +8,6 @@ All input and output paths are configured in experiments/paths.yaml (`raw_data_r
 """
 
 import gzip
-import os
 import pathlib
 import shutil
 import struct
@@ -18,7 +17,6 @@ import warnings
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pyreadr
 import rasterio.features as rfeatures
 import richdem as rd
 import rioxarray as rxr
@@ -140,11 +138,6 @@ def reproject_like(x: xr.Dataset, ref: xr.Dataset | None, resampling=enums.Resam
         return x.rio.reproject_match(ref, resampling=resampling, **kwargs)
 
     return x.rio.reproject(ref, resampling=resampling, **kwargs)
-
-
-def read_rds(path: str | os.PathLike) -> pd.DataFrame:
-    """Read an R RDS file into a DataFrame."""
-    return pyreadr.read_r(path)[None]
 
 
 TIME_START = "1992-01-01"
