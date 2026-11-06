@@ -4,9 +4,9 @@
 
 [![Tests](https://github.com/bask0/drop-ch/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/drop-ch/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-<!-- Once the paper is published, uncomment and add the links:
+[![Data](https://img.shields.io/badge/Data-10.3929%2Fethz--c--000808810-green.svg)](https://doi.org/10.3929/ethz-c-000808810)
+<!-- Once the paper is published, uncomment and add the link:
 [![Paper](https://img.shields.io/badge/Paper-JOURNAL%20(YEAR)-blue.svg)](https://doi.org/PAPER_DOI)
-[![Data](https://img.shields.io/badge/Data-Dataset-green.svg)](https://doi.org/DATA_DOI)
 -->
 
 <!-- Once the paper is published, uncomment and add a figure from the paper:
@@ -80,12 +80,9 @@ pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 
 ### Data
 
-All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`.
+All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`. It is published in the ETH Research Collection, [doi:10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810), as a single zip file (39 GB) that also contains the HRU polygons, the river network for the maps and the model outputs of the paper. Its README describes all files and lists the `experiments/paths.yaml` keys to point at them (see [Paths](#paths)). With the model outputs, the notebooks reproduce the figures without rerunning the experiments.
 
-> [!NOTE]
-> The download location of the dataset will be added here once the paper is published.
-
-Alternatively, it can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
+Alternatively, the dataset can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
 
 The dataset is built from third-party data, which is not part of this repository and remains subject to the terms of its providers. Check those terms before using or redistributing the data:
 
@@ -94,7 +91,7 @@ The dataset is built from third-party data, which is not part of this repository
 - **Observed discharge:** FOEN and, for gauges outside Switzerland, other sources.
 - **Catchment attributes:** MERIT Hydro, SoilGrids, CORINE land cover, a dam inventory and a river network.
 
-The analysis notebooks additionally use CAMELS-CH and draw the EU-Hydro river network on the maps; set `river_file` in `experiments/paths.yaml` to the river network GeoPackage.
+The analysis notebooks additionally use CAMELS-CH and draw the EU-Hydro river network on the maps; set `river_file` in `experiments/paths.yaml` to the river network GeoPackage of the published data.
 
 ### Paths
 
@@ -174,6 +171,8 @@ After the runs, two post-processing steps prepare the inputs of the notebooks:
 - `bash slurm/combine_predictions.sh` combines the `xval.py` predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
 - `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb`.
 
+The published data contains both, so these steps are only needed after your own runs.
+
 The notebooks in `analysis/` then produce the figures in `analysis/figures/`. The hillshades used as map backgrounds are included in `analysis/data/`; they are derived from MERIT Hydro ([Yamazaki et al., 2019](https://doi.org/10.1029/2019WR024873)) and licensed under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Start Jupyter in the pixi environment with:
 
 ```bash
@@ -210,6 +209,8 @@ Two tests use the real dataset at `data_root` and are skipped automatically if i
 
 > [!NOTE]
 > Citation information will be added here once the paper is published.
+
+The data: [doi:10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810).
 
 ## License
 
