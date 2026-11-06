@@ -25,7 +25,6 @@ PATH_KEYS = {
     "geodata_root": "Directory with the MERIT, SoilGrids and CORINE geodata (preprocessing only).",
     "meteoswiss_root": "MeteoSwiss gridded data archive (preprocessing only).",
     "era5land_root": "ERA5-Land archive with the processed 0.1 degree data (preprocessing only).",
-    "machflow_root": "Companion machflow project with CAMELS-CH, stations and benchmark runs (notebooks only).",
     "predictions_file": "Combined predictions of all models, predictions_combined.zarr (notebooks only).",
 }
 

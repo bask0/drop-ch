@@ -152,7 +152,7 @@ pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yam
 
 Adding `-c experiments/fast_dev_run_config.yaml` runs a tiny version (2 trials, 1 epoch, short sequences) to check the setup. It writes to `<log_root>/fast_dev_run/`, so it never overwrites the results of real runs.
 
-The analysis notebooks `analysis/prevah_vs_runoff.ipynb` (comparison with PREVAH) and `analysis/hp_tune.ipynb` additionally need the `xval.py` run of `prevah`, which the other experiments do not:
+The analysis notebook `analysis/prevah_vs_runoff.ipynb` (comparison with PREVAH) additionally needs the `xval.py` run of `prevah`, which the other experiments do not:
 
 ```bash
 pixi run python xval.py -c experiments/paths.yaml -c experiments/base_config.yaml -c experiments/prevah/config.yaml
@@ -172,7 +172,7 @@ bash slurm/example_minimal.sh
 After the runs, two post-processing steps prepare the inputs of the notebooks:
 
 - `bash slurm/combine_predictions.sh` combines the `xval.py` predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
-- `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb` and `analysis/sensitivity.ipynb`.
+- `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb`.
 
 The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Start Jupyter in the pixi environment with:
 
