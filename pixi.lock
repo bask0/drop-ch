@@ -322,7 +322,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyarrow-core-25.0.0-py311h1358635_1_cpu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyogrio-0.12.1-py311h422ce6a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyproj-3.7.2-py311h400b93a_3.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pyreadr-0.5.8-py311h333b685_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.11.2-py311h242c0d0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.11.18-h5f976f7_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py311h3778330_1.conda
@@ -6072,8 +6071,7 @@ packages:
   - python_abi 3.11.* *_cp311
   license: Apache-2.0
   license_family: APACHE
-  purls:
-  - pkg:pypi/pyarrow?source=compressed-mapping
+  purls: []
   run_exports: {}
   size: 26193
   timestamp: 1792228265886
@@ -6096,7 +6094,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/pyarrow?source=compressed-mapping
+  - pkg:pypi/pyarrow?source=hash-mapping
   run_exports: {}
   size: 5585068
   timestamp: 1792228331664
@@ -6137,25 +6135,6 @@ packages:
   run_exports: {}
   size: 558926
   timestamp: 1772623251086
-- conda: https://conda.anaconda.org/conda-forge/linux-64/pyreadr-0.5.8-py311h333b685_0.conda
-  sha256: f35768974ca825c020966013696e13e6227ab080d4a06514d9264ee2a7e49ac5
-  md5: ff341e7846e0cdea91da3c066705f610
-  depends:
-  - python
-  - narwhals >=2.10.1
-  - libgcc >=15
-  - __glibc >=2.17,<3.0.a0
-  - liblzma >=5.8.3,<6.0a0
-  - libzlib >=1.3.2,<2.0a0
-  - python_abi 3.11.* *_cp311
-  - bzip2 >=1.0.8,<2.0a0
-  license: AGPL-3.0-or-later
-  license_family: AGPL
-  purls:
-  - pkg:pypi/pyreadr?source=hash-mapping
-  run_exports: {}
-  size: 481354
-  timestamp: 1792873421704
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.11.2-py311h242c0d0_1.conda
   sha256: 13d65a479bb6429875770485a86cb5c5987efc1877d225062d27f70dfae9365e
   md5: 65fffae90f6781d3d875536e54f7000f
