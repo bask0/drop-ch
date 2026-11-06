@@ -147,7 +147,10 @@ GLOBAL_ATTRS = {
         "where no grid cell had its centre within an HRU. The third-party data remain subject to the terms of their "
         "providers."
     ),
-    "references": "DROP: A scalable deep learning approach for runoff simulation and river routing.",
+    "references": (
+        "Kraft, B., et al.: DROP: A scalable deep learning approach for runoff simulation and river routing, Water "
+        "Resources Research, 2026."
+    ),
     "history": "Created with project/scripts/preprocessing.py of https://github.com/bask0/drop-ch.",
 }
 
