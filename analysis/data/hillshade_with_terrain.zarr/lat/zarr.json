@@ -1,0 +1,52 @@
+{
+  "shape": [
+    3991
+  ],
+  "data_type": "float64",
+  "chunk_grid": {
+    "name": "regular",
+    "configuration": {
+      "chunk_shape": [
+        3991
+      ]
+    }
+  },
+  "chunk_key_encoding": {
+    "name": "default",
+    "configuration": {
+      "separator": "/"
+    }
+  },
+  "fill_value": "NaN",
+  "codecs": [
+    {
+      "name": "bytes",
+      "configuration": {
+        "endian": "little"
+      }
+    },
+    {
+      "name": "blosc",
+      "configuration": {
+        "typesize": 8,
+        "cname": "zstd",
+        "clevel": 1,
+        "shuffle": "shuffle",
+        "blocksize": 0
+      }
+    }
+  ],
+  "attributes": {
+    "axis": "Y",
+    "long_name": "y coordinate of projection",
+    "standard_name": "projection_y_coordinate",
+    "units": "metre",
+    "_FillValue": "AAAAAAAA+H8="
+  },
+  "dimension_names": [
+    "lat"
+  ],
+  "zarr_format": 3,
+  "node_type": "array",
+  "storage_transformers": []
+}
