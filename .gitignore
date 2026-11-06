@@ -35,6 +35,8 @@ MNIST/
 
 # === Datasets and predictions ===
 *.zarr
+# The hillshade map backgrounds of the analysis notebooks are tracked.
+!analysis/data/*.zarr
 
 # === Optuna DB files ===
 **/optuna.db

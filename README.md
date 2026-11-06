@@ -163,7 +163,7 @@ After the runs, two post-processing steps prepare the inputs of the notebooks:
 - `bash slurm/combine_predictions.sh` combines the `xval.py` predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
 - `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb`.
 
-The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Start Jupyter in the pixi environment with:
+The notebooks in `analysis/` then produce the figures in `analysis/figures/`. The hillshades used as map backgrounds are included in `analysis/data/`; they are derived from MERIT Hydro ([Yamazaki et al., 2019](https://doi.org/10.1029/2019WR024873)) and licensed under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Start Jupyter in the pixi environment with:
 
 ```bash
 pixi run jupyter lab
@@ -202,4 +202,4 @@ Two tests use the real dataset at `data_root` and are skipped automatically if i
 
 ## License
 
-This project is licensed under the MIT License; see [LICENSE](LICENSE).
+This project is licensed under the MIT License; see [LICENSE](LICENSE). The hillshades in `analysis/data/` are an exception: as data derived from MERIT Hydro, they are licensed under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/).

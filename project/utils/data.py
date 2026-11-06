@@ -10,6 +10,7 @@ import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
 from rasterio import features as rio_features
+from zarr.codecs import BloscCodec, BloscShuffle
 
 from project.core.utils import get_zarr_v3_encoding
 
@@ -149,8 +150,8 @@ def load_hillshade(
         dem_path: Path to DEM.
         use_terrain: If True, mix in terrain colors.
         use_slope_for_lake_mask: If True, use slope from DEM to identify lakes.
-        lake_rgb: RGB color for lakes (0-255). if None, default blue (174, 216, 229) is used. Passing forces
-            recompute.
+        lake_rgb: RGB color for lakes (0-255). If None, the blue (86, 150, 245) of the paper's figures and of the
+            stored hillshades is used. Passing a color forces recompute.
         target_crs: Target coordinate reference system for hillshade.
         force_recompute: If True, recompute hillshade even if it exists.
 
@@ -169,7 +170,7 @@ def load_hillshade(
         hillshade_path = hillshade_dir / "hillshade.zarr"
 
     if lake_rgb is None:
-        lake_rgb = (174, 216, 229)  # light blue
+        lake_rgb = (86, 150, 245)
     else:
         force_recompute = True
 
@@ -252,6 +253,15 @@ def load_hillshade(
     hillshade = rgb.where(mask_da, np.asarray(lake_rgb)[None, None, :] / 255).to_dataset(name="hs")
 
     enc = get_zarr_v3_encoding(hillshade)
+    # Store the colors in [0, 1] as integer steps of 1/254, and areas without DEM coverage (NaN) as 255, compressed
+    # strongly enough to keep the hillshades in the repository small.
+    enc["hs"].update(
+        dtype="uint8",
+        scale_factor=1 / 254,
+        _FillValue=255,
+        compressors=BloscCodec(cname="zstd", clevel=9, shuffle=BloscShuffle.bitshuffle),
+        chunks=(1000, 1000, 3),
+    )
 
     hillshade.to_zarr(hillshade_path, mode="w", encoding=enc)
 
