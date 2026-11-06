@@ -94,7 +94,7 @@ The dataset is built from third-party data, which is not part of this repository
 - **Observed discharge:** FOEN and, for gauges outside Switzerland, other sources.
 - **Catchment attributes:** MERIT Hydro, SoilGrids, CORINE land cover, a dam inventory and a river network.
 
-The analysis notebooks additionally use CAMELS-CH.
+The analysis notebooks additionally use CAMELS-CH and draw the EU-Hydro river network on the maps; set `river_file` in `experiments/paths.yaml` to the river network GeoPackage.
 
 ### Paths
 
