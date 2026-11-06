@@ -970,7 +970,7 @@ for column in [*static_columns, "area", "downstream", "has_prevah", "is_lake"]:
     dummy_da.loc[{"ezgnr": cm.index.values}] = da_values
     ds[column] = dummy_da
 
-ds["has_obs"] = ds.Q_obs.notnull().any("time").compute()
+ds["has_obs"] = ds.Q_obs_m3s.notnull().any("time").compute()
 ds = ds.rename({"ezgnr": "hru"})
 
 # Add x/y coordinates to ds and HRUs.
