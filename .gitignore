@@ -59,7 +59,6 @@ slurm/cluster.sh
 .idea/
 *.sublime-project
 *.sublime-workspace
-.claude/
 
 # === OS-generated ===
 .DS_Store
