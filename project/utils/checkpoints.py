@@ -1,4 +1,4 @@
-"""Locate the best checkpoint of a tuning run."""
+"""Locate the best checkpoint of a tuning run, or take a given checkpoint file."""
 
 import os
 from pathlib import Path
@@ -7,24 +7,31 @@ import optuna
 
 
 def find_best_checkpoint(experiment_dir: str | Path) -> Path:
-    """Return the checkpoint of the best tuning trial in an experiment directory.
+    """Return the checkpoint of the best tuning trial in an experiment directory, or `experiment_dir` if it is a file.
 
     Looks for exactly one `tune/optuna.db` below `experiment_dir` (e.g. `<log_root>/routed/random`), as written by
     `tune.py`. The study stores the checkpoint path from when the run was tuned; it is resolved relative to the
     current location of the database, so this keeps working after the run directory was moved.
 
+    A checkpoint file is returned as is, so that the published model weights (`models/<model>/best.ckpt`) can be used
+    without their tuning runs.
+
     Args:
-        experiment_dir (str | Path): Experiment directory containing a `tune/optuna.db`, at any depth.
+        experiment_dir (str | Path): Experiment directory containing a `tune/optuna.db`, at any depth, or a checkpoint
+            file.
 
     Returns:
         Path: Path to the best trial's checkpoint, e.g. `<experiment_dir>/tune/trial_006/checkpoints/best.ckpt`.
 
     Raises:
-        FileNotFoundError: If no `tune/optuna.db` is found in `experiment_dir`.
+        FileNotFoundError: If `experiment_dir` is a directory without a `tune/optuna.db`.
         ValueError: If more than one `tune/optuna.db` is found in `experiment_dir`.
     """
 
     experiment_dir = Path(experiment_dir)
+
+    if experiment_dir.is_file():
+        return experiment_dir
 
     hits = [
         Path(root) / "optuna.db"
