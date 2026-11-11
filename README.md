@@ -4,7 +4,7 @@
 
 [![Tests](https://github.com/bask0/drop-ch/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/drop-ch/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Data](https://img.shields.io/badge/Data-10.3929%2Fethz--c--000808810-green.svg)](https://doi.org/10.3929/ethz-c-000808810)
+[![Data](https://img.shields.io/badge/Data-hdl%3A20.500.11850%2F808810-green.svg)](https://hdl.handle.net/20.500.11850/808810)
 <!-- Once the paper is published, uncomment and add the link:
 [![Paper](https://img.shields.io/badge/Paper-JOURNAL%20(YEAR)-blue.svg)](https://doi.org/PAPER_DOI)
 -->
@@ -80,7 +80,7 @@ pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 
 ### Data
 
-All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`. It is published in the ETH Research Collection, [doi:10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810), as a single zip file (39 GB) that also contains the HRU polygons, the river network for the maps, the model outputs and the trained models of the paper. Its README describes all files, lists the `experiments/paths.yaml` keys to point at them (see [Paths](#paths)), and shows how to predict with the trained models. With the model outputs, the notebooks reproduce the figures without rerunning the experiments.
+All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`. It is published in the ETH Research Collection, [hdl:20.500.11850/808810](https://hdl.handle.net/20.500.11850/808810), as a single zip file (39 GB) that also contains the HRU polygons, the river network for the maps, the model outputs and the trained models of the paper. Its README describes all files, lists the `experiments/paths.yaml` keys to point at them (see [Paths](#paths)), and shows how to predict with the trained models. With the model outputs, the notebooks reproduce the figures without rerunning the experiments.
 
 Alternatively, the dataset can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
 
@@ -210,7 +210,7 @@ Two tests use the real dataset at `data_root` and are skipped automatically if i
 > [!NOTE]
 > Citation information will be added here once the paper is published.
 
-The data: [doi:10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810).
+The data: [hdl:20.500.11850/808810](https://hdl.handle.net/20.500.11850/808810).
 
 ## License
 
