@@ -30,8 +30,9 @@ class DROP(pl.LightningModule):
     response units (HRUs).
 
     Note that argument `runoff_net_exp_dir` is required and should point to a RunoffNet experiment directory
-    with exactly one `**/tune/optuna.db` file present. From this file, the best model hyperparameters and
-    weights (if use_pretrained=True) or hyperparameters only (if use_pretrained=False) will be loaded.
+    with exactly one `**/tune/optuna.db` file present, or to a RunoffNet checkpoint file. From the best trial's
+    checkpoint, or the given one, the model hyperparameters and weights (if use_pretrained=True) or hyperparameters
+    only (if use_pretrained=False) will be loaded.
 
     Attributes:
         runoff_net (RunoffNet): Runoff prediction network.
@@ -107,8 +108,9 @@ class DROP(pl.LightningModule):
                 Default is None.
             num_dynamic_features (int | None, optional): Number of dynamic input features for the runoff network.
                 Default is None.
-            runoff_net_exp_dir (str | Path | None, optional): Path to RunoffNet experiment directory. Assumes only
-                one '**/tune/optuna.db' file present, otherwise will raise an error. If None, RunoffNet is built
+            runoff_net_exp_dir (str | Path | None, optional): Path to RunoffNet experiment directory, or to a
+                RunoffNet checkpoint file. A directory must contain exactly one '**/tune/optuna.db' file, whose best
+                trial's checkpoint is used, otherwise will raise an error. If None, RunoffNet is built
                 from scratch using the `runoff_hidden_size`, `runoff_lstm_layers`, `runoff_dropout`, and
                 `runoff_enc_dropout` parameters. Default is None.
             runoff_use_pretrained (bool, optional): If True, loads pretrained weights for RunoffNet from
@@ -802,7 +804,7 @@ class DROP(pl.LightningModule):
 
         Args:
             experiment_dir (str | Path): Path to the RunoffNet experiment directory containing
-                the 'tune/optuna.db' file.
+                the 'tune/optuna.db' file, or to a RunoffNet checkpoint file.
             use_pretrained (bool): If True, loads pretrained weights, else only hyperparameters.
             **overwrite_kwargs: Additional keyword arguments to overwrite default parameters.
 

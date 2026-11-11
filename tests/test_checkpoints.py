@@ -44,6 +44,17 @@ def test_ignores_cross_validation_database(tmp_path):
     assert find_best_checkpoint(tmp_path) == tmp_path / "tune" / "trial_000" / "checkpoints" / "best.ckpt"
 
 
+def test_checkpoint_file_is_returned_as_is(tmp_path):
+    """A checkpoint file, such as the published `models/prevah/best.ckpt`, is used directly, without a database."""
+
+    checkpoint = tmp_path / "models" / "prevah" / "best.ckpt"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.touch()
+
+    assert find_best_checkpoint(checkpoint) == checkpoint
+    assert find_best_checkpoint(str(checkpoint)) == checkpoint
+
+
 def test_missing_database_raises(tmp_path):
     with pytest.raises(FileNotFoundError, match=r"tune/optuna\.db"):
         find_best_checkpoint(tmp_path)
