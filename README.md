@@ -80,7 +80,7 @@ pixi run setup  # optional: install the git hooks (ruff, nbstripout)
 
 ### Data
 
-All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`. It is published in the ETH Research Collection, [hdl:20.500.11850/808810](https://hdl.handle.net/20.500.11850/808810), as a single zip file (39 GB) that also contains the HRU polygons, the river network for the maps, the model outputs and the trained models of the paper. Its README describes all files, lists the `experiments/paths.yaml` keys to point at them (see [Paths](#paths)), and shows how to predict with the trained models. With the model outputs, the notebooks reproduce the figures without rerunning the experiments.
+All experiments read the harmonized HRU dataset `harmonized_hru_data.zarr`. It is published in the ETH Research Collection, [hdl:20.500.11850/808810](https://hdl.handle.net/20.500.11850/808810), as a single zip file (41 GB) that also contains the HRU polygons, the river network for the maps, the model outputs and the trained models of the paper. Its README describes all files, lists the `experiments/paths.yaml` keys to point at them (see [Paths](#paths)), and shows how to predict with the trained models. With the model outputs, the notebooks reproduce the figures without rerunning the experiments.
 
 Alternatively, the dataset can be rebuilt from the raw data with `project/scripts/download_data.py` and `project/scripts/preprocessing.py`, which need the raw data paths in `experiments/paths.yaml`.
 
