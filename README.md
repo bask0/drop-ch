@@ -5,6 +5,7 @@
 [![Tests](https://github.com/bask0/drop-ch/actions/workflows/tests.yml/badge.svg)](https://github.com/bask0/drop-ch/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Data](https://img.shields.io/badge/Data-10.3929%2Fethz--c--000808810-green.svg)](https://doi.org/10.3929/ethz-c-000808810)
+[![DOI](https://zenodo.org/badge/1021416074.svg)](https://doi.org/10.5281/zenodo.24220454)
 <!-- Once the paper is published, uncomment and add the link:
 [![Paper](https://img.shields.io/badge/Paper-JOURNAL%20(YEAR)-blue.svg)](https://doi.org/PAPER_DOI)
 -->
@@ -171,6 +172,8 @@ The paper:
 > Kraft, B., Kauzlaric, M., Aeberhard, W. H., Zappa, M., and Gudmundsson, L.: DROP: A scalable deep learning approach for runoff simulation and river routing, *Water Resources Research*, in revision, 2026.
 
 The data: [https://doi.org/10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810).
+
+The code: [https://doi.org/10.5281/zenodo.24220454](https://doi.org/10.5281/zenodo.24220454).
 
 ## License
 
