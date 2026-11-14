@@ -27,7 +27,7 @@ Designed to capture spatial and temporal dynamics of runoff generation and flow 
 This repository contains the code accompanying a paper on DROP.
 
 > [!NOTE]
-> If your published work uses or builds on this code, please cite the paper (see [Citation](#citation)). The reference will be added once the paper is published.
+> If your published work uses or builds on this code, please cite the paper (see [Citation](#citation)).
 
 This repository is shared to make the methods and results of the paper transparent and reproducible. It is research code, organized around the experiments in the paper, rather than a general-purpose tool for streamflow modeling. It was developed for our data and compute environment, so running the experiments and notebooks elsewhere will require some adaptation, and applying the model to other regions or datasets even more so.
 
@@ -207,8 +207,9 @@ Two tests use the real dataset at `data_root` and are skipped automatically if i
 
 ## Citation
 
-> [!NOTE]
-> Citation information will be added here once the paper is published.
+The paper:
+
+> Kraft, B., Kauzlaric, M., Aeberhard, W. H., Zappa, M., and Gudmundsson, L.: DROP: A scalable deep learning approach for runoff simulation and river routing, *Water Resources Research*, in revision, 2026.
 
 The data: [https://doi.org/10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810).
 
