@@ -179,9 +179,6 @@ The notebooks in `analysis/` then produce the figures in `analysis/figures/`. Th
 pixi run jupyter lab
 ```
 
-> [!NOTE]
-> A mapping from the notebooks to the figures of the paper will be added once the paper is published.
-
 Some plotting utilities render via Plotly and require a local Chrome install:
 
 ```bash
