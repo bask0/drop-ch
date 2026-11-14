@@ -164,44 +164,6 @@ bash slurm/example_minimal.sh
 > [!WARNING]
 > `run_all.sh` and `experiments/*/run.sh` use `--tuning_engine.overwrite=True`, which deletes the existing results of these experiments under `<log_root>`.
 
-### Results and figures
-
-After the runs, two post-processing steps prepare the inputs of the notebooks:
-
-- `bash slurm/combine_predictions.sh` combines the `xval.py` predictions of all experiments except `prevah` into `<log_root>/predictions_combined.zarr`. Set `predictions_file` in `experiments/paths.yaml` to this file.
-- `bash slurm/compute_source_contribution.sh` computes the source contributions of the Aare outlet during the August 2007 flood, used by `analysis/case_study.ipynb`.
-
-The published data contains both, so these steps are only needed after your own runs.
-
-The notebooks in `analysis/` then produce the figures in `analysis/figures/`. The hillshades used as map backgrounds are included in `analysis/data/`; they are derived from MERIT Hydro ([Yamazaki et al., 2019](https://doi.org/10.1029/2019WR024873)) and licensed under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Start Jupyter in the pixi environment with:
-
-```bash
-pixi run jupyter lab
-```
-
-Some plotting utilities render via Plotly and require a local Chrome install:
-
-```bash
-pixi run plotly_get_chrome
-```
-
-## Tests
-
-```bash
-pixi run pytest
-```
-
-The tests run on small synthetic inputs and need neither the dataset nor a GPU. They cover:
-
-- **Routing:** mass conservation on synthetic river networks, instant routing, time sub-steps, graph construction and path sampling.
-- **Runoff model:** chunked inference matches a single pass in outputs and gradients.
-- **Loss, metrics and normalization:** analytically known values (e.g. NSE, KGE), NaN masking and exact inverse transforms.
-- **Data splits and unit conversions.**
-- **Configuration:** every experiment config resolves through the CLI, test runs with `fast_dev_run_config.yaml` stay out of the real results, and no machine-specific paths are tracked outside `experiments/paths.yaml`.
-- **Checkpoints:** the best tuning checkpoint is found, also after moving a run directory.
-
-Two tests use the real dataset at `data_root` and are skipped automatically if it isn't found. The test suite, ruff and a check that notebooks are committed without outputs run on every push to `main` and on every pull request (see the badge above); there, the tests that need the dataset or a local `experiments/paths.yaml` are skipped.
-
 ## Citation
 
 The paper:
