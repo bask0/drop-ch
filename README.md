@@ -169,7 +169,7 @@ bash slurm/example_minimal.sh
 
 The paper:
 
-> Kraft, B., Kauzlaric, M., Aeberhard, W. H., Zappa, M., and Gudmundsson, L.: DROP: A scalable deep learning approach for runoff simulation and river routing, *Water Resources Research*, in revision, 2026.
+> Kraft, B., Kauzlaric, M., Aeberhard, W. H., Zappa, M., and Gudmundsson, L. (2026): DROP: A scalable deep learning approach for runoff simulation and river routing, *Water Resources Research*, [doi.org/10.1029/2025WR042915](https://doi.org/10.1029/2025WR042915).
 
 The data: [https://doi.org/10.3929/ethz-c-000808810](https://doi.org/10.3929/ethz-c-000808810).
 
